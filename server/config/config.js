@@ -1,0 +1,49 @@
+require('dotenv').config();
+
+module.exports = {
+  development: {
+    username: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
+    dialect: 'postgres',
+    logging: console.log,
+    seederStorage: 'sequelize',
+    migrationStorageTableName: 'sequelize_meta',
+    seederStorageTableName: 'sequelize_data'
+  },
+  test: {
+    username: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: `${process.env.DB_NAME}_test`,
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
+    dialect: 'postgres',
+    logging: false,
+    seederStorage: 'sequelize',
+    migrationStorageTableName: 'sequelize_meta',
+    seederStorageTableName: 'sequelize_data'
+  },
+  production: {
+    use_env_variable: 'DATABASE_URL',
+    dialect: 'postgres',
+    protocol: 'postgres',
+    dialectOptions: {
+      ssl: {
+        require: true,
+        rejectUnauthorized: false
+      }
+    },
+    logging: false,
+    seederStorage: 'sequelize',
+    migrationStorageTableName: 'sequelize_meta',
+    seederStorageTableName: 'sequelize_data',
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    }
+  }
+};

@@ -1,0 +1,71 @@
+# Node
+node_modules/
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build outputs
+build/
+dist/
+.tmp/
+temp/
+
+# TypeScript
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Coverage
+coverage/
+.nyc_output/
+coverage-final.json
+
+# Framework/build directories
+.next/
+.nuxt/
+.out/
+.svelte-kit/
+.vercel/
+.netlify/
+.storybook/
+.cypress/
+playwright-report/
+test-results/
+
+# Monorepo tools
+.turbo/
+.pnpm-store/
+
+# React Native / Mobile
+android/
+ios/
+*.keystore
+*.keystore.jks
+*.jks
+*.p12
+*.mobileprovision
+.expo/
+.expo-shared/
+*.apk
+*.aab
+web-build/
+
+# IDEs / Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git-credentials
