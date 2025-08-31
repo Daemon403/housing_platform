@@ -2,6 +2,7 @@ import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import apiRoutes from './routes';
 
 // Load environment variables
 dotenv.config();
@@ -19,6 +20,8 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
+// Routes
+
 // Health check endpoint
 app.get('/api/health', (req: Request, res: Response) => {
   res.status(200).json({
@@ -28,6 +31,9 @@ app.get('/api/health', (req: Request, res: Response) => {
     uptime: process.uptime(),
   });
 });
+
+// Mount API routes
+app.use('/api', apiRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
