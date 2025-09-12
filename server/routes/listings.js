@@ -23,6 +23,11 @@ router.get('/search', listingController.searchListings);
 // @access  Public
 router.get('/nearby', listingController.getNearbyListings);
 
+// @route   GET /api/v1/listings/me
+// @desc    Get current user's listings
+// @access  Private
+router.get('/me', auth.protect, listingController.getMyListings);
+
 // @route   GET /api/v1/listings/user/:userId
 // @desc    Get all listings by user
 // @access  Public

@@ -1,9 +1,12 @@
 import { Link, Navigate, Route, Routes, useSearchParams, useParams } from 'react-router-dom'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
 import { api, type Listing } from './api/client'
 import { FilterBar, type Filters } from './components/FilterBar'
 import { useAuth } from './context/AuthContext'
+import OwnerDashboard from './pages/OwnerDashboard';
+import OwnerLayout from './pages/owner/OwnerLayout';
+import EditListing from './pages/EditListing';
 
 function Header() {
   const { user, logout } = useAuth()
@@ -101,12 +104,11 @@ function ListingDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { id } = useParams()
-  const { user, token } = useAuth()
+  const { token } = useAuth()
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [avail, setAvail] = useState<string>('')
+  const [availability, setAvailability] = useState<{available: boolean; message: string} | null>(null)
   const [bookingMsg, setBookingMsg] = useState<string>('')
-  const canFavorite = !!token
   const [favMsg, setFavMsg] = useState('')
   useEffect(() => {
     if (!id) return
@@ -144,11 +146,26 @@ function ListingDetailPage() {
             <div style={{ display: 'flex', gap: 8 }}>
               <input type="date" value={startDate} onChange={(e)=>setStartDate(e.target.value)} />
               <input type="date" value={endDate} onChange={(e)=>setEndDate(e.target.value)} />
-              <button onClick={async ()=>{
+              <button onClick={async () => {
                 if (!id || !startDate || !endDate) return
-                try{ const r = await api.checkAvailability(id, startDate, endDate); setAvail(r.available? 'Available' : 'Not available') }catch(e:any){ setAvail('Error checking availability') }
+                try {
+                  const response = await api.checkAvailability(id, startDate, endDate)
+                  setAvailability({
+                    available: response.available,
+                    message: response.available ? 'Available' : 'Not available for the selected dates'
+                  })
+                } catch (error: any) {
+                  setAvailability({
+                    available: false,
+                    message: 'Error checking availability: ' + (error.message || 'Unknown error')
+                  })
+                }
               }}>Check</button>
-              {avail && <span>{avail}</span>}
+              {availability && (
+                <span style={{ color: availability.available ? 'green' : 'red' }}>
+                  {availability.message}
+                </span>
+              )}
             </div>
           </div>
 
@@ -531,17 +548,19 @@ function MyBookingsPage() {
   const { token } = useAuth()
   const [rows, setRows] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string| null>(null)
+  const [error, setError] = useState<string | null>(null)
   if (!token) return <Navigate to="/login" replace />
-  useEffect(() => { api.getMyBookings(token).then((d)=>setRows(d.data)).catch((e)=>setError(e.message)).finally(()=>setLoading(false)) }, [token])
+  useEffect(() => { 
+    api.getMyBookings(token).then((d) => setRows(d.data)).catch((e) => setError(e.message)).finally(() => setLoading(false)) 
+  }, [token])
   return (
     <main className="container">
       <h1>My Bookings</h1>
       {loading && <p>Loading...</p>}
       {error && <p style={{ color: 'crimson' }}>Error: {error}</p>}
-      <ul style={{ listStyle:'none', padding:0 }}>
-        {rows.map((b)=> (
-          <li key={b.id} style={{ border:'1px solid #eee', padding:12, borderRadius:8, marginBottom:8 }}>
+      <ul style={{ listStyle: 'none', padding: 0 }}>
+        {rows.map((b) => (
+          <li key={b.id} style={{ border: '1px solid #eee', padding: 12, borderRadius: 8, marginBottom: 8 }}>
             <div><b>Listing:</b> {b.listing?.title || b.listingId}</div>
             <div><b>When:</b> {new Date(b.startDate).toLocaleDateString()} - {new Date(b.endDate).toLocaleDateString()}</div>
             <div><b>Status:</b> {b.status}</div>
@@ -563,6 +582,16 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/bookings" element={<MyBookingsPage />} />
+        
+        {/* Owner Routes */}
+        <Route path="/owner" element={<OwnerLayout />}>
+          <Route index element={<OwnerDashboard />} />
+          <Route path="listings/:id/edit" element={<EditListing />} />
+          <Route path="listings" element={<div>Listings Management</div>} />
+          <Route path="bookings" element={<div>Bookings Management</div>} />
+          <Route path="messages" element={<div>Messages</div>} />
+        </Route>
+        
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       <Footer />

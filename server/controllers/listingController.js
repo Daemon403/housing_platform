@@ -139,6 +139,34 @@ exports.getNearbyListings = asyncHandler(async (req, res, next) => {
   res.status(200).json({ success: true, ...result });
 });
 
+// @desc    Get current user's listings
+// @route   GET /api/v1/listings/me
+// @access  Private
+exports.getMyListings = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 10 } = req.query;
+  const offset = (page - 1) * limit;
+  const { count, rows } = await db.Listing.findAndCountAll({
+    where: { ownerId: req.user.id },
+    include: [{
+      model: db.User,
+      as: 'owner',
+      attributes: ['id', 'name', 'profileImage']
+    }],
+    offset: parseInt(offset),
+    limit: parseInt(limit),
+    order: [['createdAt', 'DESC']]
+  });
+
+  res.status(200).json({
+    success: true,
+    count: rows.length,
+    total: count,
+    totalPages: Math.ceil(count / limit),
+    currentPage: parseInt(page),
+    data: rows
+  });
+});
+
 // @desc    Get listings by owner
 // @route   GET /api/v1/listings/user/:userId
 // @access  Public
