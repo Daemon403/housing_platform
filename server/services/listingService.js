@@ -54,12 +54,25 @@ async function listListings(params = {}) {
   const offset = (Number(page) - 1) * Number(pageSize);
   const limit = Number(pageSize);
 
-  const { rows, count } = await db.Listing.findAndCountAll({
-    where,
-    offset,
-    limit,
-    order: [[sort, order]],
-  });
+  const allowedSort = new Set(['createdAt','price','rating','viewCount']);
+  const safeSort = allowedSort.has(String(sort)) ? String(sort) : 'createdAt';
+  const safeOrder = String(order).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+  let rows = [], count = 0;
+  try {
+    const res = await db.Listing.findAndCountAll({
+      where,
+      offset,
+      limit,
+      order: [[safeSort, safeOrder]],
+    });
+    rows = res.rows;
+    count = res.count;
+  } catch (err) {
+    // Log and rethrow for controller to handle
+    console.error('[listings] findAndCountAll error:', err.message);
+    throw err;
+  }
 
   // Optional radius filter (post-filter for simplicity; consider PostGIS later for scale)
   let filteredRows = rows;

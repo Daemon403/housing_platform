@@ -338,10 +338,9 @@ const sendTokenResponse = (user, statusCode, res) => {
   // Create token
   const token = user.getSignedJwtToken();
 
+  const cookieDays = parseInt(process.env.JWT_COOKIE_EXPIRE || '30', 10);
   const options = {
-    expires: new Date(
-      Date.now() + process.env.JWT_COOKIE_EXPIRE * 24 * 60 * 60 * 1000
-    ),
+    expires: new Date(Date.now() + cookieDays * 24 * 60 * 60 * 1000),
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production'
   };

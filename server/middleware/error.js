@@ -41,10 +41,16 @@ const errorHandler = (err, req, res, next) => {
     error = new ErrorResponse(message, 401);
   }
 
-  res.status(error.statusCode || 500).json({
+  const status = error.statusCode || 500;
+  const payload = {
     success: false,
     error: error.message || 'Server Error'
-  });
+  };
+  if (process.env.NODE_ENV === 'development') {
+    payload.stack = err.stack;
+    payload.name = err.name;
+  }
+  res.status(status).json(payload);
 };
 
 module.exports = errorHandler;

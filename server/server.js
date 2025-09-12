@@ -38,9 +38,20 @@ app.use(express.urlencoded({ extended: true }));
 // Cookie parser
 app.use(cookieParser());
 
-// Enable CORS
+// Enable CORS (support multiple origins via comma-separated FRONTEND_URL)
+const allowedOrigins = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+console.log('[BOOT] CORS allowed origins:', allowedOrigins);
 app.use(cors({
-  origin: process.env.FRONTEND_URL,
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // allow non-browser or same-origin
+    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
 

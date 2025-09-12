@@ -94,5 +94,62 @@ export const api = {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` }
     })
+  },
+  async getFavorites(token: string) {
+    return http<{ success: true; data: Listing[] }>(`/api/v1/users/me/favorites`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+  },
+  // Owner endpoints
+  async getMyListings(token: string) {
+    return http<{ success: true; data: Listing[] }>(`/api/v1/users/me/listings`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+  },
+  async createListing(token: string, payload: Partial<Listing> & { price: number }) {
+    return http<{ success: true; data: Listing }>(`/api/v1/listings`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload)
+    })
+  },
+  async updateListing(token: string, id: string, payload: Partial<Listing>) {
+    return http<{ success: true; data: Listing }>(`/api/v1/listings/${id}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload)
+    })
+  },
+  async deleteListing(token: string, id: string) {
+    return http<{ success: true }>(`/api/v1/listings/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+  },
+  async getOwnerBookings(token: string, listingId: string) {
+    return http<{ success: true; data: any[] }>(`/api/v1/bookings/listing/${listingId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+  },
+  async approveBooking(token: string, bookingId: string) {
+    return http<{ success: true; data: any }>(`/api/v1/bookings/${bookingId}/approve`, {
+      method: 'PUT', headers: { Authorization: `Bearer ${token}` }
+    })
+  },
+  async rejectBooking(token: string, bookingId: string) {
+    return http<{ success: true; data: any }>(`/api/v1/bookings/${bookingId}/reject`, {
+      method: 'PUT', headers: { Authorization: `Bearer ${token}` }
+    })
+  },
+  // Auth updates
+  async updateDetails(token: string, payload: Partial<{ name: string; email: string }>) {
+    return http<{ success: true; data: any }>(`/api/v1/auth/updatedetails`, {
+      method: 'PUT', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(payload)
+    })
+  },
+  async updatePassword(token: string, payload: { currentPassword: string; newPassword: string }) {
+    return http<{ success: true }>(`/api/v1/auth/updatepassword`, {
+      method: 'PUT', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(payload)
+    })
   }
 }

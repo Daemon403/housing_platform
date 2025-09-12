@@ -85,7 +85,13 @@ exports.removeFromFavorites = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, message: 'Unfavorited (placeholder)' });
 });
 exports.getFavorites = asyncHandler(async (req, res) => {
-  res.status(200).json({ success: true, data: [] });
+  const rows = await db.Favorite.findAll({
+    where: { userId: req.user.id },
+    include: [{ model: db.Listing, as: 'listing' }],
+    order: [['created_at', 'DESC']]
+  });
+  const listings = rows.map(r => r.listing).filter(Boolean);
+  res.status(200).json({ success: true, count: listings.length, data: listings });
 });
 
 // Payments

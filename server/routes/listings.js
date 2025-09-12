@@ -11,6 +11,28 @@ const router = express.Router();
 // @access  Public
 router.get('/', listingController.getListings);
 
+// IMPORTANT: Register static routes BEFORE parameterized routes like '/:id'
+
+// @route   GET /api/v1/listings/search
+// @desc    Search listings with filters
+// @access  Public
+router.get('/search', listingController.searchListings);
+
+// @route   GET /api/v1/listings/nearby
+// @desc    Get listings near a location
+// @access  Public
+router.get('/nearby', listingController.getNearbyListings);
+
+// @route   GET /api/v1/listings/user/:userId
+// @desc    Get all listings by user
+// @access  Public
+router.get('/user/:userId', listingController.getListingsByUser);
+
+// @route   GET /api/v1/listings/categories/stats
+// @desc    Get listing statistics by category
+// @access  Public
+router.get('/categories/stats', listingController.getCategoryStats);
+
 // @route   GET /api/v1/listings/:id
 // @desc    Get single listing
 // @access  Public
@@ -116,16 +138,6 @@ router.delete(
   listingController.deleteListingImage
 );
 
-// @route   GET /api/v1/listings/user/:userId
-// @desc    Get all listings by user
-// @access  Public
-router.get('/user/:userId', listingController.getListingsByUser);
-
-// @route   GET /api/v1/listings/search
-// @desc    Search listings with filters
-// @access  Public
-router.get('/search', listingController.searchListings);
-
 // @route   POST /api/v1/listings/:id/favorite
 // @desc    Add listing to favorites
 // @access  Private
@@ -144,10 +156,6 @@ router.delete(
   listingController.removeFromFavorites
 );
 
-// @route   GET /api/v1/listings/nearby
-// @desc    Get listings near a location
-// @access  Public
-router.get('/nearby', listingController.getNearbyListings);
 
 // @route   POST /api/v1/listings/:id/report
 // @desc    Report a listing
@@ -185,9 +193,5 @@ router.post(
 // @access  Public
 router.get('/:id/availability', listingController.checkAvailability);
 
-// @route   GET /api/v1/listings/categories/stats
-// @desc    Get listing statistics by category
-// @access  Public
-router.get('/categories/stats', listingController.getCategoryStats);
 
 module.exports = router;
