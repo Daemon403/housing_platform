@@ -9,8 +9,18 @@ const logger = require('./utils/logger');
 // Load environment variables
 dotenv.config({ path: '.env' });
 
+// Debug: print essential env
+console.log('[BOOT] NODE_ENV=', process.env.NODE_ENV, ' PORT=', process.env.PORT);
+
+// Attach basic process listeners
+process.on('exit', (code) => console.log('[BOOT] Process exit with code', code));
+process.on('uncaughtException', (err) => console.error('[BOOT] UncaughtException', err));
+process.on('unhandledRejection', (reason) => console.error('[BOOT] UnhandledRejection', reason));
+
 // Import database connection
+console.log('[BOOT] Requiring models...');
 const db = require('./models');
+console.log('[BOOT] Models required.');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -51,16 +61,19 @@ const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
   try {
+    console.log('[BOOT] Authenticating database...');
     // Test database connection
     await db.sequelize.authenticate();
     logger.info('Database connected...');
 
     // Sync database (set force: false in production)
     if (process.env.NODE_ENV === 'development') {
+      console.log('[BOOT] Syncing database...');
       await db.sequelize.sync({ force: false });
       logger.info('Database synced');
     }
 
+    console.log('[BOOT] Starting HTTP server on port', PORT);
     const server = app.listen(PORT, () => {
       logger.info(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
     });

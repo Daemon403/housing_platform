@@ -1,0 +1,67 @@
+export type Listing = {
+  id: string
+  title: string
+  description?: string
+  price: string | number
+  slug?: string
+  status: string
+  images?: string[]
+  address?: Record<string, any>
+}
+
+const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000'
+
+async function http<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
+    ...init,
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(text || `HTTP ${res.status}`)
+  }
+  return res.json() as Promise<T>
+}
+
+export const api = {
+  baseUrl: API_URL,
+  async getListings(params?: { page?: number; pageSize?: number }) {
+    const q = new URLSearchParams()
+    if (params?.page) q.set('page', String(params.page))
+    if (params?.pageSize) q.set('limit', String(params.pageSize))
+    const data = await http<{ data: Listing[] }>(`/api/v1/listings${q.toString() ? `?${q.toString()}` : ''}`)
+    return data.data
+  },
+  async getListing(id: string) {
+    const data = await http<{ data: Listing }>(`/api/v1/listings/${id}`)
+    return data.data
+  },
+  async searchListings(params: {
+    q?: string
+    minPrice?: number
+    maxPrice?: number
+    propertyType?: string
+    roomType?: string
+    page?: number
+    pageSize?: number
+  }) {
+    const q = new URLSearchParams()
+    if (params.q) q.set('q', params.q)
+    if (params.minPrice != null) q.set('minPrice', String(params.minPrice))
+    if (params.maxPrice != null) q.set('maxPrice', String(params.maxPrice))
+    if (params.propertyType) q.set('propertyType', params.propertyType)
+    if (params.roomType) q.set('roomType', params.roomType)
+    if (params.page) q.set('page', String(params.page))
+    if (params.pageSize) q.set('pageSize', String(params.pageSize))
+    const data = await http<{ data: Listing[]; pagination: any }>(`/api/v1/listings/search?${q.toString()}`)
+    return data
+  },
+  async nearby(params: { lat: number; lng: number; radiusKm: number }) {
+    const q = new URLSearchParams()
+    q.set('lat', String(params.lat))
+    q.set('lng', String(params.lng))
+    q.set('radiusKm', String(params.radiusKm))
+    const data = await http<{ data: Listing[]; pagination: any }>(`/api/v1/listings/nearby?${q.toString()}`)
+    return data
+  },
+}

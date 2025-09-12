@@ -1,29 +1,38 @@
 const nodemailer = require('nodemailer');
 const logger = require('./logger');
 
-// Create a transporter object using the default SMTP transport
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-  tls: {
-    // Do not fail on invalid certs
-    rejectUnauthorized: process.env.NODE_ENV === 'production',
-  },
-});
+// In development, avoid outbound SMTP connections; use JSON transport instead
+let transporter;
+if (process.env.NODE_ENV !== 'production') {
+  transporter = nodemailer.createTransport({ jsonTransport: true });
+  logger.info('Email transporter: JSON transport (development)');
+} else {
+  // Create a transporter object using SMTP in production
+  transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT) || 587,
+    secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+    auth: process.env.SMTP_USER && process.env.SMTP_PASS ? {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    } : undefined,
+    tls: {
+      // Do not fail on invalid certs outside production
+      rejectUnauthorized: true,
+    },
+  });
+}
 
-// Verify connection configuration
-transporter.verify(function (error, success) {
-  if (error) {
-    logger.error('SMTP connection error:', error);
-  } else {
-    logger.info('SMTP server is ready to take our messages');
-  }
-});
+// Verify connection configuration only in production with SMTP host configured
+if (process.env.NODE_ENV === 'production' && process.env.SMTP_HOST) {
+  transporter.verify(function (error, success) {
+    if (error) {
+      logger.error('SMTP connection error:', error);
+    } else {
+      logger.info('SMTP server is ready to take our messages');
+    }
+  });
+}
 
 // Send email function
 const sendEmail = async (options) => {
