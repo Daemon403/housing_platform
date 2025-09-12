@@ -6,145 +6,128 @@ module.exports = {
   async up(queryInterface, Sequelize) {
     const now = new Date();
 
-    // Users
-    const users = [
-      {
+    // Use models for proper JSONB handling and hooks
+    const db = require('../models');
+
+    // Users (idempotent)
+    const [alice] = await db.User.findOrCreate({
+      where: { email: 'alice@student.edu' },
+      defaults: {
         id: uuidv4(),
         name: 'Alice Student',
-        email: 'alice@student.edu',
         role: 'student',
-        password: '$2a$10$CUMULATIVEHASHPLACEHOLDER', // replace or login flow will overwrite on create; here unused
-        is_verified: true,
-        created_at: now,
-        updated_at: now
-      },
-      {
+        password: 'Password123!', // will be hashed by model hook
+        isVerified: true,
+        createdAt: now,
+        updatedAt: now
+      }
+    });
+
+    const [bob] = await db.User.findOrCreate({
+      where: { email: 'bob@owner.com' },
+      defaults: {
         id: uuidv4(),
         name: 'Bob Homeowner',
-        email: 'bob@owner.com',
         role: 'homeowner',
-        password: '$2a$10$CUMULATIVEHASHPLACEHOLDER',
-        is_verified: true,
-        created_at: now,
-        updated_at: now
+        password: 'Password123!',
+        isVerified: true,
+        createdAt: now,
+        updatedAt: now
       }
-    ];
+    });
 
-    await queryInterface.bulkInsert('users', users);
-
-    const ownerId = users[1].id;
-
-    // Listings
-    const listings = [
-      {
+    // Listings (idempotent by slug)
+    const [l1] = await db.Listing.findOrCreate({
+      where: { slug: 'cozy-private-room-near-campus-1' },
+      defaults: {
         id: uuidv4(),
-        owner_id: ownerId,
+        ownerId: bob.id,
         title: 'Cozy Private Room near Campus',
-        slug: 'cozy-private-room-near-campus-1',
         description: 'Bright private room, shared kitchen, 10 mins to campus.',
-        property_type: 'room',
-        room_type: 'private-room',
-        price: 500.00,
-        deposit: 200.00,
-        available_from: now,
-        min_stay_months: 3,
-        max_occupants: 1,
+        propertyType: 'room',
+        roomType: 'private-room',
+        price: 500.0,
+        deposit: 200.0,
+        availableFrom: now,
+        minStayMonths: 3,
+        maxOccupants: 1,
         bedrooms: 1,
         bathrooms: 1.0,
         size: 15,
-        is_furnished: true,
-        has_wifi: true,
+        isFurnished: true,
+        hasWifi: true,
         address: { street: '123 College St', city: 'Uni City', state: 'CA', postalCode: '90001', country: 'USA' },
         location: { lat: 34.0522, lng: -118.2437 },
         images: [],
         amenities: ['wifi', 'desk'],
         status: 'active',
-        created_at: now,
-        updated_at: now
-      },
-      {
+      }
+    });
+
+    const [l2] = await db.Listing.findOrCreate({
+      where: { slug: 'entire-apartment-downtown-1' },
+      defaults: {
         id: uuidv4(),
-        owner_id: ownerId,
+        ownerId: bob.id,
         title: 'Entire Apartment Downtown',
-        slug: 'entire-apartment-downtown-1',
         description: '2 bed apartment, great views.',
-        property_type: 'apartment',
-        room_type: 'entire-place',
-        price: 1800.00,
-        deposit: 500.00,
-        available_from: now,
-        min_stay_months: 6,
-        max_occupants: 3,
+        propertyType: 'apartment',
+        roomType: 'entire-place',
+        price: 1800.0,
+        deposit: 500.0,
+        availableFrom: now,
+        minStayMonths: 6,
+        maxOccupants: 3,
         bedrooms: 2,
         bathrooms: 1.5,
         size: 70,
-        is_furnished: false,
-        has_parking: true,
+        isFurnished: false,
+        hasParking: true,
         address: { street: '500 Main St', city: 'Uni City', state: 'CA', postalCode: '90002', country: 'USA' },
         location: { lat: 34.05, lng: -118.25 },
         images: [],
         amenities: ['parking'],
         status: 'active',
-        created_at: now,
-        updated_at: now
       }
-    ];
+    });
 
-    await queryInterface.bulkInsert('listings', listings);
-
-    // Conversations
-    const conversations = [
-      {
+    // Conversation
+    const [conv] = await db.Conversation.findOrCreate({
+      where: { title: 'Inquiry about Cozy Room' },
+      defaults: {
         id: uuidv4(),
-        listing_id: listings[0].id,
-        title: 'Inquiry about Cozy Room',
-        is_group: false,
-        created_at: now,
-        updated_at: now
+        listingId: l1.id,
+        isGroup: false,
       }
-    ];
+    });
 
-    await queryInterface.bulkInsert('conversations', conversations);
+    // Participants (through raw join table since it's simple)
+    await queryInterface.bulkInsert('conversation_participants', [
+      { conversation_id: conv.id, user_id: alice.id, created_at: now, updated_at: now },
+      { conversation_id: conv.id, user_id: bob.id, created_at: now, updated_at: now },
+    ], { ignoreDuplicates: true });
 
-    // Participants
-    const participants = [
-      {
-        conversation_id: conversations[0].id,
-        user_id: users[0].id, // Alice
-        created_at: now,
-        updated_at: now
-      },
-      {
-        conversation_id: conversations[0].id,
-        user_id: ownerId, // Bob
-        created_at: now,
-        updated_at: now
-      }
-    ];
-    await queryInterface.bulkInsert('conversation_participants', participants);
-
-    // Messages
-    const messages = [
-      {
+    // Message
+    await db.Message.findOrCreate({
+      where: { content: 'Hi! Is the room still available next month?' },
+      defaults: {
         id: uuidv4(),
-        conversation_id: conversations[0].id,
-        sender_id: users[0].id,
-        receiver_id: ownerId,
+        conversationId: conv.id,
+        senderId: alice.id,
+        receiverId: bob.id,
         content: 'Hi! Is the room still available next month?',
-        is_read: false,
-        message_type: 'text',
-        created_at: now,
-        updated_at: now
+        isRead: false,
+        messageType: 'text',
       }
-    ];
-    await queryInterface.bulkInsert('messages', messages);
+    });
   },
 
   async down(queryInterface, Sequelize) {
-    await queryInterface.bulkDelete('messages', null, {});
+    const db = require('../models');
+    await db.Message.destroy({ where: {} });
     await queryInterface.bulkDelete('conversation_participants', null, {});
-    await queryInterface.bulkDelete('conversations', null, {});
-    await queryInterface.bulkDelete('listings', null, {});
-    await queryInterface.bulkDelete('users', null, {});
+    await db.Conversation.destroy({ where: {} });
+    await db.Listing.destroy({ where: {} });
+    await db.User.destroy({ where: {} });
   }
 };
