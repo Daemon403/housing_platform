@@ -32,7 +32,8 @@ const models = {
   Refund: require('./Refund')(sequelize, Sequelize.DataTypes),
   Dispute: require('./Dispute')(sequelize, Sequelize.DataTypes),
   MessageAttachment: require('./MessageAttachment')(sequelize, Sequelize.DataTypes),
-  MaintenanceUpdate: require('./MaintenanceUpdate')(sequelize, Sequelize.DataTypes)
+  MaintenanceUpdate: require('./MaintenanceUpdate')(sequelize, Sequelize.DataTypes),
+  Favorite: require('./Favorite')(sequelize, Sequelize.DataTypes)
 };
 
 // Initialize models

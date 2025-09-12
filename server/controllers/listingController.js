@@ -193,19 +193,24 @@ exports.deleteListingImage = asyncHandler(async (req, res, next) => {
   res.status(200).json({ success: true, data: listing });
 });
 
-// @desc    Add to favorites (placeholder - depends on favorites model)
+// @desc    Add to favorites
 // @route   POST /api/v1/listings/:id/favorite
 // @access  Private
-exports.addToFavorites = asyncHandler(async (req, res) => {
-  // Placeholder implementation since Favorites model is not defined
-  res.status(200).json({ success: true, message: 'Favorited (placeholder)' });
+exports.addToFavorites = asyncHandler(async (req, res, next) => {
+  const listing = await db.Listing.findByPk(req.params.id);
+  if (!listing) return next(new ErrorResponse('Listing not found', 404));
+  await db.Favorite.findOrCreate({ where: { userId: req.user.id, listingId: listing.id } });
+  res.status(200).json({ success: true });
 });
 
-// @desc    Remove from favorites (placeholder)
+// @desc    Remove from favorites
 // @route   DELETE /api/v1/listings/:id/favorite
 // @access  Private
-exports.removeFromFavorites = asyncHandler(async (req, res) => {
-  res.status(200).json({ success: true, message: 'Unfavorited (placeholder)' });
+exports.removeFromFavorites = asyncHandler(async (req, res, next) => {
+  const listing = await db.Listing.findByPk(req.params.id);
+  if (!listing) return next(new ErrorResponse('Listing not found', 404));
+  await db.Favorite.destroy({ where: { userId: req.user.id, listingId: listing.id } });
+  res.status(200).json({ success: true });
 });
 
 // @desc    Report a listing (placeholder)

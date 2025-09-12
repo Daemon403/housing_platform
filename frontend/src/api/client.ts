@@ -7,6 +7,7 @@ export type Listing = {
   status: string
   images?: string[]
   address?: Record<string, any>
+  amenities?: string[]
 }
 
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000'
@@ -56,12 +57,42 @@ export const api = {
     const data = await http<{ data: Listing[]; pagination: any }>(`/api/v1/listings/search?${q.toString()}`)
     return data
   },
-  async nearby(params: { lat: number; lng: number; radiusKm: number }) {
+  async nearby(params: { lat: number; lng: number; radiusKm: number; page?: number; pageSize?: number }) {
     const q = new URLSearchParams()
     q.set('lat', String(params.lat))
     q.set('lng', String(params.lng))
     q.set('radiusKm', String(params.radiusKm))
+    if (params.page) q.set('page', String(params.page))
+    if (params.pageSize) q.set('pageSize', String(params.pageSize))
     const data = await http<{ data: Listing[]; pagination: any }>(`/api/v1/listings/nearby?${q.toString()}`)
     return data
   },
+  async checkAvailability(listingId: string, startDate: string, endDate: string) {
+    const q = new URLSearchParams({ startDate, endDate })
+    return http<{ success: true; available: boolean }>(`/api/v1/listings/${listingId}/availability?${q.toString()}`)
+  },
+  async createBooking(token: string, payload: { listingId: string; startDate: string; endDate: string; guests: number; totalPrice: number; paymentMethod?: string }) {
+    return http<{ success: true; data: any }>(`/api/v1/bookings`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload)
+    })
+  },
+  async getMyBookings(token: string) {
+    return http<{ success: true; data: any[] }>(`/api/v1/bookings/my-bookings`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+  },
+  async favorite(token: string, listingId: string) {
+    return http<{ success: true }>(`/api/v1/listings/${listingId}/favorite`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+  },
+  async unfavorite(token: string, listingId: string) {
+    return http<{ success: true }>(`/api/v1/listings/${listingId}/favorite`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+  }
 }
