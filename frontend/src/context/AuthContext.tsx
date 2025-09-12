@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 
 type User = {
@@ -36,6 +37,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token])
 
+  const navigate = useNavigate()
+
   const login = async (email: string, password: string) => {
     const res = await fetch(`${api.baseUrl}/api/v1/auth/login`, {
       method: 'POST',
@@ -45,15 +48,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!res.ok) throw new Error(await res.text())
     const data = await res.json()
     setToken(data.token)
+    // Redirect based on user role after successful login
+    if (data.data?.role === 'homeowner') {
+      navigate('/owner')
+    } else {
+      navigate('/')
+    }
   }
 
   const register = async (payload: { name: string; email: string; password: string; role: 'student' | 'homeowner' }) => {
     const res = await fetch(`${api.baseUrl}/api/v1/auth/register`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify(payload)
     })
     if (!res.ok) throw new Error(await res.text())
     const data = await res.json()
     setToken(data.token)
+    // Redirect based on user role after registration
+    if (payload.role === 'homeowner') {
+      navigate('/owner')
+    } else {
+      navigate('/')
+    }
   }
 
   const logout = () => setToken(null)

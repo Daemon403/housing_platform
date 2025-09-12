@@ -273,51 +273,256 @@ function NotFoundPage() {
 
 function LoginPage() {
   const { login } = useAuth()
-  const [email, setEmail] = useState('alice@student.edu')
-  const [password, setPassword] = useState('Password123!')
-  const [error, setError] = useState<string| null>(null)
-  const [ok, setOk] = useState('')
+  const [formData, setFormData] = useState({
+    email: '',
+    password: ''
+  })
+  const [error, setError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    
+    // Basic validation
+    if (!formData.email || !formData.password) {
+      setError('Please enter both email and password')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await login(formData.email, formData.password)
+      // On success, the AuthContext will handle the redirect
+    } catch (err: any) {
+      // More specific error messages based on the error response
+      try {
+        const errorData = JSON.parse(err.message)
+        setError(errorData.error || 'Login failed. Please try again.')
+      } catch {
+        setError('Login failed. Please check your credentials and try again.')
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <main className="container">
       <h1>Login</h1>
-      <div style={{ display: 'grid', gap: 8, maxWidth: 360 }}>
-        <input placeholder="Email" value={email} onChange={(e)=>setEmail(e.target.value)} />
-        <input placeholder="Password" type="password" value={password} onChange={(e)=>setPassword(e.target.value)} />
-        <button onClick={async ()=>{
-          try{ setError(null); await login(email, password); setOk('Logged in') }catch(e:any){ setError('Login failed') }
-        }}>Login</button>
-        {error && <p style={{ color:'crimson' }}>{error}</p>}
-        {ok && <p>{ok}</p>}
-      </div>
+      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '16px', maxWidth: '420px' }}>
+        <div>
+          <label htmlFor="email">Email *</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            value={formData.email}
+            onChange={handleChange}
+            placeholder="your@email.com"
+            required
+            autoComplete="username"
+          />
+        </div>
+
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <label htmlFor="password">Password *</label>
+            <Link to="/forgot-password" style={{ fontSize: '0.875rem' }}>Forgot password?</Link>
+          </div>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            value={formData.password}
+            onChange={handleChange}
+            placeholder="••••••••"
+            required
+            minLength={6}
+            autoComplete="current-password"
+          />
+        </div>
+
+        <button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Logging in...' : 'Login'}
+        </button>
+
+        {error && <p style={{ color: 'crimson', margin: '8px 0 0' }}>{error}</p>}
+        
+        <p style={{ marginTop: '16px', textAlign: 'center' }}>
+          Don't have an account? <Link to="/register">Register here</Link>
+        </p>
+      </form>
     </main>
   )
 }
 
 function RegisterPage() {
   const { register } = useAuth()
-  const [name, setName] = useState('Test User')
-  const [email, setEmail] = useState('test@example.com')
-  const [password, setPassword] = useState('Password123!')
-  const [role, setRole] = useState<'student'|'homeowner'>('student')
-  const [error, setError] = useState<string| null>(null)
-  const [ok, setOk] = useState('')
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'student' as 'student' | 'homeowner',
+    phone: '',
+    university: '',
+    studentId: ''
+  })
+  const [error, setError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setIsSubmitting(true)
+
+    // Basic validation
+    if (!formData.name || !formData.email || !formData.password) {
+      setError('Name, email, and password are required')
+      setIsSubmitting(false)
+      return
+    }
+
+    if (formData.role === 'student' && !formData.university) {
+      setError('University is required for students')
+      setIsSubmitting(false)
+      return
+    }
+
+    try {
+      await register(formData)
+      // Success state will be handled by the AuthContext redirect
+    } catch (err: any) {
+      setError(err.message || 'Registration failed. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <main className="container">
       <h1>Register</h1>
-      <div style={{ display: 'grid', gap: 8, maxWidth: 420 }}>
-        <input placeholder="Name" value={name} onChange={(e)=>setName(e.target.value)} />
-        <input placeholder="Email" value={email} onChange={(e)=>setEmail(e.target.value)} />
-        <input placeholder="Password" type="password" value={password} onChange={(e)=>setPassword(e.target.value)} />
-        <select value={role} onChange={(e)=>setRole(e.target.value as any)}>
-          <option value="student">Student</option>
-          <option value="homeowner">Homeowner</option>
-        </select>
-        <button onClick={async ()=>{
-          try{ setError(null); await register({ name, email, password, role }); setOk('Registered') }catch(e:any){ setError('Register failed') }
-        }}>Create account</button>
-        {error && <p style={{ color:'crimson' }}>{error}</p>}
-        {ok && <p>{ok}</p>}
-      </div>
+      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '16px', maxWidth: '420px' }}>
+        <div>
+          <label htmlFor="name">Full Name *</label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            value={formData.name}
+            onChange={handleChange}
+            placeholder="John Doe"
+            required
+          />
+        </div>
+
+        <div>
+          <label htmlFor="email">Email *</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            value={formData.email}
+            onChange={handleChange}
+            placeholder="john@example.com"
+            required
+          />
+        </div>
+
+        <div>
+          <label htmlFor="password">Password *</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            value={formData.password}
+            onChange={handleChange}
+            placeholder="••••••••"
+            minLength={6}
+            required
+          />
+        </div>
+
+        <div>
+          <label htmlFor="role">I am a *</label>
+          <select
+            id="role"
+            name="role"
+            value={formData.role}
+            onChange={handleChange}
+            required
+          >
+            <option value="student">Student</option>
+            <option value="homeowner">Homeowner</option>
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="phone">Phone Number</label>
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            value={formData.phone}
+            onChange={handleChange}
+            placeholder="+1 (123) 456-7890"
+          />
+        </div>
+
+        {formData.role === 'student' && (
+          <>
+            <div>
+              <label htmlFor="university">University *</label>
+              <input
+                id="university"
+                name="university"
+                type="text"
+                value={formData.university}
+                onChange={handleChange}
+                placeholder="University Name"
+                required={formData.role === 'student'}
+              />
+            </div>
+            <div>
+              <label htmlFor="studentId">Student ID</label>
+              <input
+                id="studentId"
+                name="studentId"
+                type="text"
+                value={formData.studentId}
+                onChange={handleChange}
+                placeholder="Student ID (if applicable)"
+              />
+            </div>
+          </>
+        )}
+
+        <button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Creating Account...' : 'Create Account'}
+        </button>
+
+        {error && <p style={{ color: 'crimson', margin: '8px 0 0' }}>{error}</p>}
+        
+        <p style={{ marginTop: '16px', textAlign: 'center' }}>
+          Already have an account? <Link to="/login">Log in here</Link>
+        </p>
+      </form>
     </main>
   )
 }

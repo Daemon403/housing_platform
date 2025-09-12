@@ -94,13 +94,6 @@ exports.login = async (req, res, next) => {
       return next(new ErrorResponse('Invalid credentials', 401));
     }
 
-    // Check if account is verified
-    if (!user.isVerified && user.role !== 'admin') {
-      return next(
-        new ErrorResponse('Please verify your email before logging in', 401)
-      );
-    }
-
     // Check if account is active
     if (user.status !== 'active') {
       return next(
