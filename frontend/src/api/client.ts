@@ -1,13 +1,47 @@
+export type Address = {
+  street?: string
+  city?: string
+  state?: string
+  country?: string
+  postalCode?: string
+}
+
 export type Listing = {
   id: string
   title: string
-  description?: string
-  price: string | number
+  description: string
+  price: number
   slug?: string
-  status: string
+  status: 'available' | 'rented' | 'maintenance' | string
   images?: string[]
-  address?: Record<string, any>
+  address: string | Address
+  bedrooms?: number
+  bathrooms?: number
+  size?: number
+  hasWifi?: boolean
+  hasParking?: boolean
+  hasKitchen?: boolean
+  hasWasher?: boolean
+  hasTv?: boolean
+  hasAirConditioning?: boolean
+  hasHeating?: boolean
+  hasDesk?: boolean
+  location?: {
+    type: string
+    coordinates: [number, number]
+  }
   amenities?: string[]
+  bookings?: Array<{
+    id: string
+    startDate: string
+    endDate: string
+    status: 'pending' | 'confirmed' | 'cancelled'
+    user: {
+      name: string
+      email: string
+      phone: string
+    }
+  }>
 }
 
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000'

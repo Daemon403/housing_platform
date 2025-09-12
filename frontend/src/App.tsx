@@ -1,7 +1,8 @@
 import { Link, Navigate, Route, Routes, useSearchParams, useParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import './App.css'
-import { api, type Listing } from './api/client'
+import { api, type Listing, type Address } from './api/client'
+import styles from './styles/propertyCard.module.css'
 import { FilterBar, type Filters } from './components/FilterBar'
 import { useAuth } from './context/AuthContext'
 import OwnerDashboard from './pages/OwnerDashboard';
@@ -46,12 +47,91 @@ function Footer() {
 }
 
 function ListingCard({ l }: { l: Listing }) {
+  // Format the address based on its type
+  const formatAddress = (address: string | Address | undefined) => {
+    if (!address) return 'No address provided';
+    if (typeof address === 'string') return address;
+    
+    // If it's an Address object, format it into a string
+    const { street = '', city = '', state = '', country = '', postalCode = '' } = address;
+    const parts = [];
+    
+    if (street) parts.push(street);
+    if (city) parts.push(city);
+    if (state) parts.push(state);
+    if (postalCode) parts.push(postalCode);
+    if (country) parts.push(country);
+    
+    return parts.join(', ');
+  };
+  
+  // Get the formatted address
+  const formattedAddress = formatAddress(l.address);
+
   return (
-    <li style={{ border: '1px solid #eee', padding: '12px', borderRadius: 8, marginBottom: 8 }}>
-      <div style={{ fontWeight: 600 }}>
-        <Link to={`/listing/${l.id}`} style={{ textDecoration: 'none' }}>{l.title}</Link>
+    <li className={styles.card}>
+      <img 
+        src={l.images?.[0] || 'https://via.placeholder.com/400x200?text=No+Image'} 
+        alt={l.title} 
+        className={styles.image}
+      />
+      <div className={styles.content}>
+        <div className={styles.header}>
+          <Link to={`/listing/${l.id}`} className={styles.title}>{l.title}</Link>
+          <div className={styles.address}>
+            <i className="fas fa-map-marker-alt"></i>
+            {formattedAddress}
+          </div>
+        </div>
+
+        <div className={`${styles.status} ${styles[l.status || 'available']}`}>
+          {l.status || 'Available'}
+        </div>
+
+        <div className={styles.price}>
+          ${l.price?.toLocaleString()}
+          <span>/month</span>
+        </div>
+
+        <div className={styles.details}>
+          <div className={styles.detailItem}>
+            <i className="fas fa-bed"></i>
+            <span>{l.bedrooms || 'N/A'} beds</span>
+          </div>
+          <div className={styles.detailItem}>
+            <i className="fas fa-bath"></i>
+            <span>{l.bathrooms || 'N/A'} baths</span>
+          </div>
+          {l.size && (
+            <div className={styles.detailItem}>
+              <i className="fas fa-ruler-combined"></i>
+              <span>{l.size} sqft</span>
+            </div>
+          )}
+        </div>
+
+        {(l.hasWifi || l.hasParking || l.hasKitchen || l.hasWasher || l.hasTv || l.hasAirConditioning || l.hasHeating || l.hasDesk) && (
+          <div className={styles.amenities}>
+            {l.hasWifi && <span className={styles.amenity}><i className="fas fa-wifi"></i> WiFi</span>}
+            {l.hasParking && <span className={styles.amenity}><i className="fas fa-parking"></i> Parking</span>}
+            {l.hasKitchen && <span className={styles.amenity}><i className="fas fa-utensils"></i> Kitchen</span>}
+            {l.hasWasher && <span className={styles.amenity}><i className="fas fa-tshirt"></i> Washer</span>}
+            {l.hasTv && <span className={styles.amenity}><i className="fas fa-tv"></i> TV</span>}
+            {l.hasAirConditioning && <span className={styles.amenity}><i className="fas fa-snowflake"></i> AC</span>}
+            {l.hasHeating && <span className={styles.amenity}><i className="fas fa-thermometer-three-quarters"></i> Heating</span>}
+            {l.hasDesk && <span className={styles.amenity}><i className="fas fa-laptop-house"></i> Workspace</span>}
+          </div>
+        )}
+
+        <div className={styles.footer}>
+          <Link to={`/listing/${l.id}`} className={`${styles.button} ${styles.primary}`}>
+            <i className="fas fa-eye"></i> View Details
+          </Link>
+          <button className={`${styles.button} ${styles.secondary}`}>
+            <i className="far fa-heart"></i>
+          </button>
+        </div>
       </div>
-      <div style={{ fontSize: 14, opacity: 0.8 }}>Price: ${l.price} • Status: {l.status}</div>
     </li>
   )
 }
@@ -135,7 +215,11 @@ function ListingDetailPage() {
             </div>
           )}
           {listing.address && (
-            <p style={{ opacity: 0.8, fontSize: 14 }}>Address: {listing.address.street}, {listing.address.city}, {listing.address.state}</p>
+            <p style={{ opacity: 0.8, fontSize: 14 }}>
+              Address: {typeof listing.address === 'string' 
+                ? listing.address 
+                : `${listing.address.street || ''}${listing.address.street ? ', ' : ''}${listing.address.city || ''}${(listing.address.city && listing.address.state) ? ', ' : ''}${listing.address.state || ''}`.trim()}
+            </p>
           )}
           {listing.amenities && listing.amenities.length > 0 && (
             <p>Amenities: {listing.amenities.join(', ')}</p>

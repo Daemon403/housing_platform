@@ -68,17 +68,31 @@ exports.createListing = asyncHandler(async (req, res) => {
 // @route   PUT /api/v1/listings/:id
 // @access  Private
 exports.updateListing = asyncHandler(async (req, res, next) => {
+  console.log('Update listing endpoint hit');
+  console.log('Listing ID:', req.params.id);
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  
   const listing = await db.Listing.findByPk(req.params.id);
   
   if (!listing) {
+    console.log('Listing not found');
     return next(new ErrorResponse('Listing not found', 404));
   }
 
+  console.log('Found listing:', listing.id);
+  console.log('Listing owner ID:', listing.ownerId);
+  console.log('Request user ID:', req.user?.id);
+  console.log('Request user role:', req.user?.role);
+
   if (listing.ownerId !== req.user.id && req.user.role !== 'admin') {
+    console.log('Not authorized to update this listing');
     return next(new ErrorResponse('Not authorized', 401));
   }
 
+  console.log('Updating listing with data:', req.body);
   await listing.update(req.body);
+  
+  console.log('Listing updated successfully');
   res.status(200).json({ success: true, data: listing });
 });
 

@@ -88,7 +88,7 @@ router.put(
   [
     auth.protect,
     auth.authorize('homeowner'),
-    upload.array('images', 10), // Max 10 images
+    // Remove the upload.array middleware since we're not sending files in the update
     [
       check('title', 'Title is required').optional().not().isEmpty(),
       check('description', 'Description is required').optional().not().isEmpty(),

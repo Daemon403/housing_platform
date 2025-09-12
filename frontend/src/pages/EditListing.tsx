@@ -110,32 +110,50 @@ export default function EditListing() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    
     try {
       const token = localStorage.getItem('token');
-      if (!token) throw new Error('No authentication token found');
+      if (!token) {
+        throw new Error('No authentication token found. Please log in again.');
+      }
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/v1/listings/${id}`, {
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/v1/listings/${id}`;
+      console.log('Sending request to:', apiUrl);
+      
+      const requestBody = {
+        ...listing,
+        location: {
+          type: 'Point',
+          coordinates: [listing.longitude, listing.latitude]
+        }
+      };
+      
+      console.log('Request body:', JSON.stringify(requestBody, null, 2));
+
+      const response = await fetch(apiUrl, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          ...listing,
-          location: {
-            type: 'Point',
-            coordinates: [listing.longitude, listing.latitude]
-          }
-        }),
+        credentials: 'include',
+        body: JSON.stringify(requestBody),
       });
 
+      const responseData = await response.json().catch(() => ({}));
+      console.log('Response status:', response.status);
+      console.log('Response data:', responseData);
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to update listing');
+        throw new Error(responseData.message || `Failed to update listing (${response.status})`);
       }
 
-      navigate('/owner/dashboard');
+      // Show success message and redirect to the owner dashboard
+      alert('Listing updated successfully!');
+      navigate('/owner');
     } catch (err) {
+      console.error('Error updating listing:', err);
       setError(err instanceof Error ? err.message : 'Failed to update listing');
     }
   };

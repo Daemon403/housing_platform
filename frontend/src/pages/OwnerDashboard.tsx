@@ -1,68 +1,90 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { PropertyCard } from '../components/PropertyCard';
 import './OwnerDashboard.css';
 
-type Listing = {
+interface Booking {
+  id: string;
+  startDate: string;
+  endDate: string;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  user: {
+    name: string;
+    email: string;
+    phone: string;
+  };
+}
+
+export interface Listing {
   id: string;
   title: string;
   description: string;
   price: number;
-  address: string;
-  status: 'available' | 'rented' | 'maintenance';
-  bookings: Array<{
-    id: string;
-    startDate: string;
-    endDate: string;
-    status: 'pending' | 'confirmed' | 'cancelled';
-    user: {
-      name: string;
-      email: string;
-      phone: string;
-    };
-  }>;
-};
+  address: string | { street?: string; city?: string; state?: string; country?: string; postalCode?: string };
+  status: 'available' | 'rented' | 'maintenance' | 'pending';
+  bedrooms?: number;
+  bathrooms?: number;
+  size?: number;
+  hasWifi?: boolean;
+  hasParking?: boolean;
+  hasKitchen?: boolean;
+  hasWasher?: boolean;
+  hasTv?: boolean;
+  hasAirConditioning?: boolean;
+  hasHeating?: boolean;
+  hasDesk?: boolean;
+  bookings: Booking[];
+  images?: string[];
+}
 
-export default function OwnerDashboard(): React.ReactElement {
+
+interface NewProperty {
+  title: string;
+  description: string;
+  price: string | number;
+  address: string;
+  location: string;
+  latitude: number;
+  longitude: number;
+  propertyType: string;
+  roomType: string;
+  availableFrom: string;
+  minStayMonths: number;
+  maxOccupants: number;
+  bedrooms: number;
+  bathrooms: number;
+  size: number;
+  isFurnished: boolean;
+  hasParking: boolean;
+  hasWifi: boolean;
+  hasKitchen: boolean;
+  hasAirConditioning: boolean;
+  hasHeating: boolean;
+  hasWasher: boolean;
+  hasTv: boolean;
+  hasDesk: boolean;
+  status: 'available' | 'rented' | 'maintenance' | 'pending';
+}
+
+const OwnerDashboard: React.FC = () => {
   const { user } = useAuth();
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddProperty, setShowAddProperty] = useState(false);
-  type ListingStatus = 'active' | 'pending' | 'rejected' | 'sold' | 'inactive';
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: 10
+  });
   
-  const [newProperty, setNewProperty] = useState<{
-    title: string;
-    description: string;
-    price: string | number;
-    address: string;
-    location: string;
-    latitude: number;
-    longitude: number;
-    propertyType: string;
-    roomType: string;
-    availableFrom: string;
-    minStayMonths: number | string;
-    maxOccupants: number | string;
-    bedrooms: number | string;
-    bathrooms: number | string;
-    size: number | string;
-    isFurnished: boolean;
-    hasParking: boolean;
-    hasWifi: boolean;
-    hasKitchen: boolean;
-    hasAirConditioning: boolean;
-    hasHeating: boolean;
-    hasWasher: boolean;
-    hasTv: boolean;
-    hasDesk: boolean;
-    status: ListingStatus;
-  }>({
+  const [newProperty, setNewProperty] = useState<NewProperty>({
     title: '',
     description: '',
     price: '',
     address: '',
-    location: 'Point',
+    location: '',
     latitude: 0,
     longitude: 0,
     propertyType: 'apartment',
@@ -82,85 +104,143 @@ export default function OwnerDashboard(): React.ReactElement {
     hasWasher: false,
     hasTv: false,
     hasDesk: false,
-    status: 'pending',
+    status: 'available',
   });
+
+  const fetchListings = async (page = 1, limit = 10) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No authentication token found in localStorage');
+        throw new Error('No authentication token found');
+      }
+      
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString()
+      });
+      
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/v1/listings/me?${queryParams}`;
+      console.log('Fetching listings from:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Include cookies in the request
+      });
+
+      console.log('Response status:', response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('API Error Response:', errorData);
+        throw new Error(errorData.message || `Failed to fetch listings: ${response.statusText}`);
+      }
+
+      const responseData = await response.json();
+      console.log('Listings data received:', responseData);
+      
+      // Handle paginated response
+      if (responseData && responseData.success && Array.isArray(responseData.data)) {
+        setListings(responseData.data);
+        setPagination({
+          currentPage: responseData.currentPage || 1,
+          totalPages: responseData.totalPages || 1,
+          totalItems: responseData.total || responseData.data.length,
+          itemsPerPage: responseData.data.length || 10
+        });
+      } else {
+        console.warn('Unexpected API response format:', responseData);
+        setListings([]);
+        setPagination(prev => ({
+          ...prev,
+          totalItems: 0,
+          currentPage: 1,
+          totalPages: 1
+        }));
+      }
+      setError(null);
+    } catch (err) {
+      console.error('Error in fetchListings:', {
+        message: err instanceof Error ? err.message : 'Unknown error',
+        error: err,
+        timestamp: new Date().toISOString()
+      });
+      setError(`Failed to load your properties. ${err instanceof Error ? err.message : 'Please try again later.'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteListing = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this listing?')) {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) throw new Error('No authentication token found');
+        
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/v1/listings/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to delete listing');
+        }
+
+        fetchListings();
+      } catch (error) {
+        console.error('Error deleting listing:', error);
+        alert('Failed to delete listing. Please try again.');
+      }
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     
-    setNewProperty(prev => {
-      // Handle different input types
-      if (type === 'number') {
-        const numValue = parseFloat(value);
-        return {
-          ...prev,
-          [name]: isNaN(numValue) ? 0 : numValue
-        };
-      } else if (type === 'checkbox') {
-        return {
-          ...prev,
-          [name]: (e.target as HTMLInputElement).checked
-        };
-      } else if (name === 'availableFrom') {
-        return {
-          ...prev,
-          [name]: value // Keep as string for date input
-        };
-      } else {
-        return {
-          ...prev,
-          [name]: value
-        };
-      }
-    });
+    setNewProperty(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
+    }));
   };
 
   const handleAddProperty = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
-      if (!token) throw new Error('No authentication token found');
+      if (!token) {
+        throw new Error('No authentication token found. Please log in again.');
+      }
 
-      // Prepare the listing data with all required fields
-      // Ensure coordinates are numbers
-      const longitude = typeof newProperty.longitude === 'string' 
-        ? parseFloat(newProperty.longitude) 
-        : Number(newProperty.longitude) || 0;
-      
-      const latitude = typeof newProperty.latitude === 'string'
-        ? parseFloat(newProperty.latitude)
-        : Number(newProperty.latitude) || 0;
+      // Validate required fields
+      if (!newProperty.title || !newProperty.price || !newProperty.address) {
+        throw new Error('Please fill in all required fields (title, price, address)');
+      }
 
-      const listingData = {
-        title: newProperty.title,
-        description: newProperty.description || 'No description provided',
+      const propertyData = {
+        ...newProperty,
         price: parseFloat(newProperty.price as string) || 0,
-        address: newProperty.address,
-        location: {
-          type: 'Point',
-          coordinates: [longitude, latitude]  // GeoJSON uses [longitude, latitude] order
-        },
-        propertyType: newProperty.propertyType,
-        roomType: newProperty.roomType,
-        availableFrom: new Date(newProperty.availableFrom).toISOString(),
+        bedrooms: Number(newProperty.bedrooms) || 1,
+        bathrooms: Number(newProperty.bathrooms) || 1,
+        size: Number(newProperty.size) || 50,
         minStayMonths: Number(newProperty.minStayMonths) || 1,
         maxOccupants: Number(newProperty.maxOccupants) || 1,
-        bedrooms: Number(newProperty.bedrooms) || 1,
-        bathrooms: parseFloat(newProperty.bathrooms as string) || 1,
-        size: Number(newProperty.size) || 50,
-        isFurnished: Boolean(newProperty.isFurnished),
-        hasParking: Boolean(newProperty.hasParking),
-        hasWifi: Boolean(newProperty.hasWifi),
-        hasKitchen: Boolean(newProperty.hasKitchen),
-        hasAirConditioning: Boolean(newProperty.hasAirConditioning),
-        hasHeating: Boolean(newProperty.hasHeating),
-        hasWasher: Boolean(newProperty.hasWasher),
-        hasTv: Boolean(newProperty.hasTv),
-        hasDesk: Boolean(newProperty.hasDesk),
-        status: 'pending' as const,
+        // Ensure all required fields have default values
+        location: newProperty.location || newProperty.address,
+        latitude: newProperty.latitude || 0,
+        longitude: newProperty.longitude || 0,
+        propertyType: newProperty.propertyType || 'apartment',
+        roomType: newProperty.roomType || 'private-room',
+        availableFrom: newProperty.availableFrom || new Date().toISOString().split('T')[0],
+        // Set status to 'pending' as per database schema
+        status: 'pending',
       };
 
-      console.log('Submitting listing data:', listingData);
+      console.log('Submitting property data:', propertyData);
 
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/v1/listings`, {
         method: 'POST',
@@ -168,32 +248,37 @@ export default function OwnerDashboard(): React.ReactElement {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(listingData),
+        body: JSON.stringify(propertyData),
       });
 
-      const responseData = await response.json();
-      console.log('Server response:', responseData);
-
+      const responseData = await response.json().catch(() => ({}));
+      
       if (!response.ok) {
+        console.error('Server responded with error:', {
+          status: response.status,
+          statusText: response.statusText,
+          data: responseData
+        });
+        
         let errorMessage = 'Failed to add property';
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.message || errorMessage;
-          console.error('Server error details:', errorData);
-        } catch (e) {
-          console.error('Error parsing error response:', e);
+        if (responseData.message) {
+          errorMessage = responseData.message;
+        } else if (responseData.error) {
+          errorMessage = responseData.error;
+        } else if (responseData.errors) {
+          // Handle validation errors
+          errorMessage = Object.values(responseData.errors).join('\n');
         }
         throw new Error(errorMessage);
       }
 
-      // Reset the form
-      setShowAddProperty(false);
+      // Reset form and fetch updated listings
       setNewProperty({
         title: '',
         description: '',
         price: '',
         address: '',
-        location: 'Point',
+        location: '',
         latitude: 0,
         longitude: 0,
         propertyType: 'apartment',
@@ -213,63 +298,27 @@ export default function OwnerDashboard(): React.ReactElement {
         hasWasher: false,
         hasTv: false,
         hasDesk: false,
-        status: 'pending' as const,
+        status: 'available',
       });
       
-      // Refresh the listings
-      if (user?.role === 'homeowner') {
-        const fetchResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/v1/listings/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        
-        if (fetchResponse.ok) {
-          const data = await fetchResponse.json();
-          setListings(Array.isArray(data.data) ? data.data : []);
-        }
-      }
-    } catch (err) {
-      console.error('Error adding property:', err);
-      setError(err instanceof Error ? err.message : 'Failed to add property');
+      setShowAddProperty(false);
+      fetchListings();
+      
+    } catch (error) {
+      console.error('Error in handleAddProperty:', error);
+      alert(`Error: ${error instanceof Error ? error.message : 'Failed to add property. Please try again.'}`);
     }
   };
 
-  const fetchListings = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('No authentication token found');
-      if (!user) throw new Error('User not authenticated');
-
-      const endpoint = user.role === 'homeowner' ? 'me' : 'owner';
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/v1/listings/${endpoint}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to fetch listings');
-      }
-
-      const data = await response.json();
-      setListings(Array.isArray(data.data) ? data.data : []);
-    } catch (err) {
-      console.error('Error fetching listings:', err);
-      setError(err instanceof Error ? err.message : 'An error occurred while fetching listings');
-    } finally {
-      setLoading(false);
-    }
+  // Handle page change
+  const handlePageChange = (newPage: number) => {
+    fetchListings(newPage, pagination.itemsPerPage);
   };
 
   useEffect(() => {
     if (user) {
       if (user.role === 'homeowner' || user.role === 'admin') {
-        fetchListings();
+        fetchListings(pagination.currentPage, pagination.itemsPerPage);
       } else {
         setError('Access denied. Homeowner or admin privileges required.');
         setLoading(false);
@@ -278,13 +327,18 @@ export default function OwnerDashboard(): React.ReactElement {
       setError('Please log in to view this page');
       setLoading(false);
     }
-  }, [user]);
+  }, [user, pagination.currentPage, pagination.itemsPerPage]);
+
+  // Debug: log listings when they change
+  useEffect(() => {
+    console.log('Listings state updated:', listings);
+  }, [listings]);
 
   if (loading) {
     return (
       <div className="container">
         <h1>Owner Dashboard</h1>
-        <p>Loading your listings...</p>
+        <p>Loading your properties...</p>
       </div>
     );
   }
@@ -293,97 +347,25 @@ export default function OwnerDashboard(): React.ReactElement {
     return (
       <div className="container">
         <h1>Owner Dashboard</h1>
-        {error && <div className="error-message" style={{ color: 'red', margin: '1rem 0' }}>{error}</div>}
-      
-      {showAddProperty && (
-        <div className="property-form">
-          <h2>Add New Property</h2>
-          <form onSubmit={handleAddProperty}>
-            <div className="form-group">
-              <label htmlFor="title">Title *</label>
-              <input
-                type="text"
-                id="title"
-                name="title"
-                value={newProperty.title}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
-            
-            <div className="form-group">
-              <label htmlFor="description">Description</label>
-              <textarea
-                id="description"
-                name="description"
-                value={newProperty.description}
-                onChange={handleInputChange}
-                rows={4}
-              />
-            </div>
-            
-            <div className="form-group">
-              <label htmlFor="price">Price per month ($) *</label>
-              <input
-                type="number"
-                id="price"
-                name="price"
-                value={newProperty.price}
-                onChange={handleInputChange}
-                min="0"
-                step="0.01"
-                required
-              />
-            </div>
-            
-            <div className="form-group">
-              <label htmlFor="address">Address *</label>
-              <input
-                type="text"
-                id="address"
-                name="address"
-                value={newProperty.address}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
-            
-            <div className="form-group">
-              <label htmlFor="status">Status *</label>
-              <select
-                id="status"
-                name="status"
-                value={newProperty.status}
-                onChange={handleInputChange}
-                required
-              >
-                <option value="available">Available</option>
-                <option value="rented">Rented</option>
-                <option value="maintenance">Under Maintenance</option>
-              </select>
-            </div>
-            
-            <div className="form-actions">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setShowAddProperty(false)}
-              >
-                Cancel
-              </button>
-              <button type="submit" className="btn btn-primary">
-                Add Property
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+        <p className="error">{error}</p>
       </div>
     );
   }
 
   return (
-    <div className="container">
+    <div className="dashboard-container">
+      <div className="dashboard-header">
+        <h1>My Properties</h1>
+        {!showAddProperty && (
+          <button 
+            className="btn btn-primary"
+            onClick={() => setShowAddProperty(true)}
+          >
+            Add New Property
+          </button>
+        )}
+      </div>
+
       {showAddProperty ? (
         <div className="property-form">
           <h2>Add New Property</h2>
@@ -399,7 +381,89 @@ export default function OwnerDashboard(): React.ReactElement {
                 required
               />
             </div>
-            
+
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="propertyType">Property Type *</label>
+                <select
+                  id="propertyType"
+                  name="propertyType"
+                  value={newProperty.propertyType}
+                  onChange={handleInputChange}
+                  required
+                  className="form-control"
+                >
+                  <option value="apartment">Apartment</option>
+                  <option value="house">House</option>
+                  <option value="condo">Condo</option>
+                  <option value="townhouse">Townhouse</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="roomType">Room Type *</label>
+                <select
+                  id="roomType"
+                  name="roomType"
+                  value={newProperty.roomType}
+                  onChange={handleInputChange}
+                  required
+                  className="form-control"
+                >
+                  <option value="private-room">Private Room</option>
+                  <option value="entire-place">Entire Place</option>
+                  <option value="shared-room">Shared Room</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="bedrooms">Bedrooms *</label>
+                <input
+                  type="number"
+                  id="bedrooms"
+                  name="bedrooms"
+                  min="1"
+                  max="20"
+                  value={newProperty.bedrooms}
+                  onChange={handleInputChange}
+                  required
+                  className="form-control"
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="bathrooms">Bathrooms *</label>
+                <input
+                  type="number"
+                  id="bathrooms"
+                  name="bathrooms"
+                  min="1"
+                  max="20"
+                  step="0.5"
+                  value={newProperty.bathrooms}
+                  onChange={handleInputChange}
+                  required
+                  className="form-control"
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="size">Size (sq ft) *</label>
+                <input
+                  type="number"
+                  id="size"
+                  name="size"
+                  min="1"
+                  value={newProperty.size}
+                  onChange={handleInputChange}
+                  required
+                  className="form-control"
+                />
+              </div>
+            </div>
+
             <div className="form-group">
               <label htmlFor="description">Description</label>
               <textarea
@@ -408,9 +472,10 @@ export default function OwnerDashboard(): React.ReactElement {
                 value={newProperty.description}
                 onChange={handleInputChange}
                 rows={4}
+                className="form-control"
               />
             </div>
-            
+
             <div className="form-group">
               <label htmlFor="price">Price per month ($) *</label>
               <input
@@ -424,7 +489,7 @@ export default function OwnerDashboard(): React.ReactElement {
                 required
               />
             </div>
-            
+
             <div className="form-group">
               <label htmlFor="address">Address *</label>
               <input
@@ -436,22 +501,52 @@ export default function OwnerDashboard(): React.ReactElement {
                 required
               />
             </div>
-            
+
             <div className="form-group">
-              <label htmlFor="status">Status *</label>
-              <select
-                id="status"
-                name="status"
-                value={newProperty.status}
+              <label>Available From *</label>
+              <input
+                type="date"
+                id="availableFrom"
+                name="availableFrom"
+                value={newProperty.availableFrom}
                 onChange={handleInputChange}
                 required
-              >
-                <option value="available">Available</option>
-                <option value="rented">Rented</option>
-                <option value="maintenance">Under Maintenance</option>
-              </select>
+                className="form-control"
+                min={new Date().toISOString().split('T')[0]}
+              />
             </div>
-            
+
+            <div className="form-group">
+              <label>Amenities</label>
+              <div className="amenities-grid">
+                {[
+                  { id: 'hasWifi', label: 'WiFi' },
+                  { id: 'hasParking', label: 'Parking' },
+                  { id: 'hasKitchen', label: 'Kitchen' },
+                  { id: 'hasWasher', label: 'Washer' },
+                  { id: 'hasTv', label: 'TV' },
+                  { id: 'hasAirConditioning', label: 'Air Conditioning' },
+                  { id: 'hasHeating', label: 'Heating' },
+                  { id: 'hasDesk', label: 'Desk' },
+                  { id: 'isFurnished', label: 'Furnished' },
+                ].map(amenity => (
+                  <div key={amenity.id} className="form-check">
+                    <input
+                      type="checkbox"
+                      id={amenity.id}
+                      name={amenity.id}
+                      checked={!!newProperty[amenity.id as keyof NewProperty]}
+                      onChange={handleInputChange}
+                      className="form-check-input"
+                    />
+                    <label htmlFor={amenity.id} className="form-check-label">
+                      {amenity.label}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="form-actions">
               <button
                 type="button"
@@ -467,361 +562,80 @@ export default function OwnerDashboard(): React.ReactElement {
           </form>
         </div>
       ) : (
-        <>
-          <div className="dashboard-header">
-            <h1>Welcome, {user?.name}</h1>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setShowAddProperty(true)}
-            >
-              + Add New Property
-            </button>
+        <div className="dashboard-content">
+          <div className="stats-container">
+            <div className="stat-card">
+              <h3>Total Properties</h3>
+              <p>{listings.length || 0}</p>
+            </div>
+            <div className="stat-card">
+              <h3>Bookings This Month</h3>
+              <p>{
+                Array.isArray(listings) ? listings.reduce((count, listing) => {
+                  const bookings = Array.isArray(listing?.bookings) ? listing.bookings : [];
+                  return count + bookings.filter(b => 
+                    b && b.startDate && new Date(b.startDate).getMonth() === new Date().getMonth()
+                  ).length;
+                }, 0) : 0
+              }</p>
+            </div>
+            <div className="stat-card">
+              <h3>Active Listings</h3>
+              <p>{Array.isArray(listings) ? listings.filter(l => l?.status === 'available').length : 0}</p>
+            </div>
           </div>
 
-      <div className="dashboard-stats">
-        <div className="stat-card">
-          <h3>Total Properties</h3>
-          <p>{listings.length}</p>
-        </div>
-        <div className="stat-card">
-          <h3>Bookings This Month</h3>
-          <p>{
-            listings.reduce((count, listing) => {
-              const bookings = listing.bookings || [];
-              return count + bookings.filter(b => 
-                b && b.startDate && new Date(b.startDate).getMonth() === new Date().getMonth()
-              ).length;
-            }, 0)
-          }</p>
-        </div>
-        <div className="stat-card">
-          <h3>Active Listings</h3>
-          <p>{listings.filter(l => l.status === 'available').length}</p>
-        </div>
-      </div>
-
-      <section className="listings-section">
-        <div className="section-header">
-          <h2>My Properties</h2>
-          <div className="filters">
-            <select>
-              <option>All Status</option>
-              <option>Available</option>
-              <option>Rented</option>
-              <option>Maintenance</option>
-            </select>
-          </div>
-        </div>
-
-        {listings.length === 0 ? (
-          <div className="empty-state">
-            <p>You don't have any properties listed yet.</p>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setShowAddProperty(true)}
-            >
-              List Your First Property
-            </button>
-          </div>
-        ) : (
-          <div className="listings-grid">
-            {listings.map((listing) => (
-              <div key={listing.id} className="property-card">
-                <div className="property-header">
-                  <h3>
-                    <Link to={`/owner/listings/${listing.id}`}>
-                      {listing.title}
-                    </Link>
-                  </h3>
-                  <span className={`status-badge ${listing.status}`}>
-                    {listing.status}
-                  </span>
-                </div>
-                <p className="property-address">{listing.address}</p>
-                <p className="property-price">${listing.price}/month</p>
-                
-                <div className="property-bookings">
-                  <h4>Upcoming Bookings</h4>
-                  {listing.bookings && listing.bookings.length > 0 ? (
-                    <ul>
-                      {listing.bookings.slice(0, 2).map(booking => (
-                        <li key={booking.id} className="booking-item">
-                          <span>{booking.startDate ? new Date(booking.startDate).toLocaleDateString() : 'N/A'}</span>
-                          <span>to</span>
-                          <span>{booking.endDate ? new Date(booking.endDate).toLocaleDateString() : 'N/A'}</span>
-                          <span className={`status ${booking.status || 'pending'}`}>{booking.status || 'pending'}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p>No upcoming bookings</p>
-                  )}
-                </div>
-                
-                <div className="property-actions">
-                  <Link to={`/owner/listings/${listing.id}/edit`} className="btn btn-sm btn-outline" style={{ marginRight: '8px' }}>
-                    Edit
-                  </Link>
+          <h2>My Listings</h2>
+          {!Array.isArray(listings) || listings.length === 0 ? (
+            <div className="empty-state">
+              <p>You don't have any properties listed yet.</p>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setShowAddProperty(true)}
+              >
+                List Your First Property
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="listings-grid">
+                {listings.map((listing) => (
+                  <PropertyCard 
+                    key={listing.id}
+                    listing={listing}
+                    showBookings={true}
+                    onDelete={handleDeleteListing}
+                  />
+                ))}
+              </div>
+              {pagination.totalPages > 1 && (
+                <div className="pagination">
                   <button 
-                    className="btn btn-sm btn-danger"
-                    onClick={async () => {
-                      if (window.confirm('Are you sure you want to delete this listing?')) {
-                        try {
-                          const token = localStorage.getItem('token');
-                          if (!token) throw new Error('No authentication token found');
-                          
-                          const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/v1/listings/${listing.id}`, {
-                            method: 'DELETE',
-                            headers: {
-                              'Authorization': `Bearer ${token}`,
-                            },
-                          });
-
-                          if (!response.ok) {
-                            throw new Error('Failed to delete listing');
-                          }
-                          
-                          // Refresh the listings after deletion
-                          fetchListings();
-                        } catch (err) {
-                          setError(err instanceof Error ? err.message : 'Failed to delete listing');
-                        }
-                      }
-                    }}
+                    onClick={() => handlePageChange(pagination.currentPage - 1)}
+                    disabled={pagination.currentPage <= 1}
+                    className="pagination-button"
                   >
-                    Delete
+                    Previous
+                  </button>
+                  <span className="pagination-info">
+                    Page {pagination.currentPage} of {pagination.totalPages}
+                  </span>
+                  <button 
+                    onClick={() => handlePageChange(pagination.currentPage + 1)}
+                    disabled={pagination.currentPage >= pagination.totalPages}
+                    className="pagination-button"
+                  >
+                    Next
                   </button>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-        </section>
-      </>
-    )}
-  </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
-}
+};
 
-// Add these styles to your CSS file
-/*
-.dashboard-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
-}
-
-.dashboard-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
-}
-
-.stat-card {
-  background: #fff;
-  padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  text-align: center;
-}
-
-.stat-card h3 {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.9rem;
-  color: #666;
-}
-
-.stat-card p {
-  margin: 0;
-  font-size: 1.8rem;
-  font-weight: bold;
-  color: #333;
-}
-
-.listings-section {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  padding: 1.5rem;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-}
-
-.listings-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
-}
-
-.property-card {
-  border: 1px solid #eee;
-  border-radius: 8px;
-  padding: 1.25rem;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.property-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}
-
-.property-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 0.5rem;
-}
-
-.property-header h3 {
-  margin: 0;
-  font-size: 1.1rem;
-}
-
-.status-badge {
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 12px;
-  font-weight: 600;
-  text-transform: capitalize;
-}
-
-.status-badge.available {
-  background: #e3f9e5;
-  color: #1b5e20;
-}
-
-.status-badge.rented {
-  background: #e3f2fd;
-  color: #0d47a1;
-}
-
-.status-badge.maintenance {
-  background: #ffebee;
-  color: #c62828;
-}
-
-.property-address {
-  color: #666;
-  margin: 0.5rem 0;
-  font-size: 0.9rem;
-}
-
-.property-price {
-  font-weight: bold;
-  font-size: 1.2rem;
-  margin: 0.5rem 0;
-  color: #333;
-}
-
-.property-bookings {
-  margin: 1rem 0;
-  padding: 0.75rem;
-  background: #f8f9fa;
-  border-radius: 6px;
-}
-
-.property-bookings h4 {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.9rem;
-  color: #555;
-}
-
-.booking-item {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr auto;
-  gap: 0.5rem;
-  align-items: center;
-  font-size: 0.85rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid #eee;
-}
-
-.booking-item:last-child {
-  border-bottom: none;
-}
-
-.booking-item .status {
-  font-size: 0.75rem;
-  padding: 0.15rem 0.5rem;
-  border-radius: 10px;
-  font-weight: 600;
-}
-
-.booking-item .status.confirmed {
-  background: #e3f9e5;
-  color: #1b5e20;
-}
-
-.booking-item .status.pending {
-  background: #fff8e1;
-  color: #e65100;
-}
-
-.booking-item .status.cancelled {
-  background: #ffebee;
-  color: #c62828;
-  text-decoration: line-through;
-}
-
-.property-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 1rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid #eee;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 3rem 1rem;
-  color: #666;
-}
-
-.btn {
-  display: inline-block;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  text-decoration: none;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s, transform 0.1s;
-}
-
-.btn:active {
-  transform: translateY(1px);
-}
-
-.btn-primary {
-  background-color: #1a73e8;
-  color: white;
-  border: none;
-}
-
-.btn-primary:hover {
-  background-color: #1557b0;
-}
-
-.btn-outline {
-  background: white;
-  border: 1px solid #ddd;
-  color: #333;
-}
-
-.btn-outline:hover {
-  background: #f5f5f5;
-}
-
-.btn-sm {
-  padding: 0.25rem 0.75rem;
-  font-size: 0.85rem;
-}
-*/
+export default OwnerDashboard;
