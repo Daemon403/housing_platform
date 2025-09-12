@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { PropertyCard } from '../components/PropertyCard';
+import { ImageUpload } from '../components/ImageUpload';
+import { api } from '../api/client';
+import type { Listing as ListingType } from '../api/client';
 import './OwnerDashboard.css';
 
 interface Booking {
@@ -78,13 +81,33 @@ const OwnerDashboard: React.FC = () => {
     totalItems: 0,
     itemsPerPage: 10
   });
-  
-  const [newProperty, setNewProperty] = useState<NewProperty>({
+
+  // Define a type for the property form data
+  type PropertyFormData = Omit<ListingType, 'id' | 'createdAt' | 'updatedAt' | 'owner' | 'bookings' | 'slug' | 'price' | 'address' | 'location'> & {
+    price: string | number;
+    address: string;
+    latitude: number;
+    longitude: number;
+    location: {
+      type: 'Point';
+      coordinates: [number, number];
+    };
+    minStayMonths: string | number;
+    maxOccupants: string | number;
+    bedrooms: string | number;
+    bathrooms: string | number;
+    size: string | number;
+  };
+
+  const [newProperty, setNewProperty] = useState<PropertyFormData>({
     title: '',
     description: '',
     price: '',
     address: '',
-    location: '',
+    location: {
+      type: 'Point',
+      coordinates: [0, 0]
+    },
     latitude: 0,
     longitude: 0,
     propertyType: 'apartment',
@@ -104,8 +127,11 @@ const OwnerDashboard: React.FC = () => {
     hasWasher: false,
     hasTv: false,
     hasDesk: false,
-    status: 'available',
+    status: 'pending',
+    images: [],
   });
+
+  const [propertyImages, setPropertyImages] = useState<File[]>([]);
 
   const fetchListings = async (page = 1, limit = 10) => {
     try {
@@ -114,15 +140,15 @@ const OwnerDashboard: React.FC = () => {
         console.error('No authentication token found in localStorage');
         throw new Error('No authentication token found');
       }
-      
+
       const queryParams = new URLSearchParams({
         page: page.toString(),
         limit: limit.toString()
       });
-      
+
       const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/v1/listings/me?${queryParams}`;
       console.log('Fetching listings from:', apiUrl);
-      
+
       const response = await fetch(apiUrl, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -132,7 +158,7 @@ const OwnerDashboard: React.FC = () => {
       });
 
       console.log('Response status:', response.status);
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('API Error Response:', errorData);
@@ -141,7 +167,7 @@ const OwnerDashboard: React.FC = () => {
 
       const responseData = await response.json();
       console.log('Listings data received:', responseData);
-      
+
       // Handle paginated response
       if (responseData && responseData.success && Array.isArray(responseData.data)) {
         setListings(responseData.data);
@@ -179,7 +205,7 @@ const OwnerDashboard: React.FC = () => {
       try {
         const token = localStorage.getItem('token');
         if (!token) throw new Error('No authentication token found');
-        
+
         const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/v1/listings/${id}`, {
           method: 'DELETE',
           headers: {
@@ -201,7 +227,7 @@ const OwnerDashboard: React.FC = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    
+
     setNewProperty(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
@@ -221,64 +247,80 @@ const OwnerDashboard: React.FC = () => {
         throw new Error('Please fill in all required fields (title, price, address)');
       }
 
-      const propertyData = {
-        ...newProperty,
-        price: parseFloat(newProperty.price as string) || 0,
-        bedrooms: Number(newProperty.bedrooms) || 1,
-        bathrooms: Number(newProperty.bathrooms) || 1,
-        size: Number(newProperty.size) || 50,
-        minStayMonths: Number(newProperty.minStayMonths) || 1,
-        maxOccupants: Number(newProperty.maxOccupants) || 1,
-        // Ensure all required fields have default values
-        location: newProperty.location || newProperty.address,
-        latitude: newProperty.latitude || 0,
-        longitude: newProperty.longitude || 0,
+// Prepare property data for API
+      const propertyData: Partial<ListingType> & { price: number } = {
+        title: newProperty.title,
+        description: newProperty.description,
+        price: parseFloat(String(newProperty.price)) || 0,
+        address: newProperty.address,
+        location: {
+          type: 'Point',
+          coordinates: [newProperty.longitude, newProperty.latitude] as [number, number]
+        },
         propertyType: newProperty.propertyType || 'apartment',
         roomType: newProperty.roomType || 'private-room',
         availableFrom: newProperty.availableFrom || new Date().toISOString().split('T')[0],
-        // Set status to 'pending' as per database schema
+        minStayMonths: Number(newProperty.minStayMonths) || 1,
+        maxOccupants: Number(newProperty.maxOccupants) || 1,
+        bedrooms: Number(newProperty.bedrooms) || 1,
+        bathrooms: Number(newProperty.bathrooms) || 1,
+        size: Number(newProperty.size) || 50,
+        isFurnished: newProperty.isFurnished,
+        hasParking: newProperty.hasParking,
+        hasWifi: newProperty.hasWifi,
+        hasKitchen: newProperty.hasKitchen,
+        hasAirConditioning: newProperty.hasAirConditioning,
+        hasHeating: newProperty.hasHeating,
+        hasWasher: newProperty.hasWasher,
+        hasTv: newProperty.hasTv,
+        hasDesk: newProperty.hasDesk,
         status: 'pending',
+        images: [],
       };
 
-      console.log('Submitting property data:', propertyData);
+      console.log('Creating property with data:', propertyData);
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/v1/listings`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(propertyData),
-      });
+      // Step 1: Create the property
+      let response;
+      try {
+        response = await api.createListing(token, propertyData);
+        console.log('Property creation response:', response);
+      } catch (error) {
+        console.error('Error creating property:', error);
+        throw new Error(`Failed to create property: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
 
-      const responseData = await response.json().catch(() => ({}));
+      // Handle the nested response structure
+      const createdProperty = response.data || response;
+      const propertyId = createdProperty?.id || createdProperty?._id;
       
-      if (!response.ok) {
-        console.error('Server responded with error:', {
-          status: response.status,
-          statusText: response.statusText,
-          data: responseData
-        });
-        
-        let errorMessage = 'Failed to add property';
-        if (responseData.message) {
-          errorMessage = responseData.message;
-        } else if (responseData.error) {
-          errorMessage = responseData.error;
-        } else if (responseData.errors) {
-          // Handle validation errors
-          errorMessage = Object.values(responseData.errors).join('\n');
+      if (!propertyId) {
+        console.error('Invalid property creation response - missing ID:', response);
+        throw new Error('Failed to create property: No property ID returned from server');
+      }
+
+      // Step 2: Upload images if any
+      if (propertyImages.length > 0) {
+        try {
+          console.log('Uploading images for property:', propertyId);
+          await api.uploadListingImages(token, propertyId, propertyImages);
+          console.log('Images uploaded successfully');
+        } catch (uploadError) {
+          console.error('Error uploading images:', uploadError);
+          // Continue with the flow even if image upload fails
         }
-        throw new Error(errorMessage);
       }
 
       // Reset form and fetch updated listings
       setNewProperty({
         title: '',
         description: '',
-        price: '',
+price: '',
         address: '',
-        location: '',
+        location: {
+          type: 'Point',
+          coordinates: [0, 0]
+        },
         latitude: 0,
         longitude: 0,
         propertyType: 'apartment',
@@ -298,11 +340,14 @@ const OwnerDashboard: React.FC = () => {
         hasWasher: false,
         hasTv: false,
         hasDesk: false,
-        status: 'available',
+        status: 'pending',
+        images: [],
       });
-      
+
+      setPropertyImages([]);
       setShowAddProperty(false);
       fetchListings();
+
       
     } catch (error) {
       console.error('Error in handleAddProperty:', error);
@@ -547,6 +592,17 @@ const OwnerDashboard: React.FC = () => {
               </div>
             </div>
 
+            <div className="form-group">
+              <label>Property Images</label>
+              <ImageUpload 
+                onImagesChange={setPropertyImages}
+                maxFiles={10}
+                maxSizeMB={5}
+                initialImages={[]}
+              />
+              <p className="form-hint">Upload high-quality images of your property (max 10 images, 5MB each)</p>
+            </div>
+
             <div className="form-actions">
               <button
                 type="button"
@@ -600,14 +656,22 @@ const OwnerDashboard: React.FC = () => {
           ) : (
             <>
               <div className="listings-grid">
-                {listings.map((listing) => (
-                  <PropertyCard 
-                    key={listing.id}
-                    listing={listing}
-                    showBookings={true}
-                    onDelete={handleDeleteListing}
-                  />
-                ))}
+                {listings
+                  .filter((listing): listing is NonNullable<typeof listing> => !!listing)
+                  .map((listing) => (
+                    <div key={listing.id} className="col-md-6 col-lg-4 mb-4">
+                      <PropertyCard 
+                        listing={{
+                          ...listing,
+                          address: listing.address || 'No address provided',
+                          // Ensure images is always an array
+                          images: Array.isArray(listing.images) ? listing.images : []
+                        }}
+                        showActions={true} 
+                        onDelete={handleDeleteListing} 
+                      />
+                    </div>
+                  ))}
               </div>
               {pagination.totalPages > 1 && (
                 <div className="pagination">

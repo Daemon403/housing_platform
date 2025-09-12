@@ -7,13 +7,14 @@ export type Address = {
 }
 
 export type Listing = {
-  id: string
+  id?: string
+  _id?: string
   title: string
   description: string
   price: number
   slug?: string
-  status: 'available' | 'rented' | 'maintenance' | string
-  images?: string[]
+  status: 'available' | 'rented' | 'maintenance' | 'pending' | 'rejected' | 'sold' | 'inactive' | string
+  images: string[]
   address: string | Address
   bedrooms?: number
   bathrooms?: number
@@ -26,6 +27,12 @@ export type Listing = {
   hasAirConditioning?: boolean
   hasHeating?: boolean
   hasDesk?: boolean
+  propertyType?: string
+  roomType?: string
+  availableFrom?: string
+  minStayMonths?: number
+  maxOccupants?: number
+  isFurnished?: boolean
   location?: {
     type: string
     coordinates: [number, number]
@@ -35,13 +42,20 @@ export type Listing = {
     id: string
     startDate: string
     endDate: string
-    status: 'pending' | 'confirmed' | 'cancelled'
+    status: 'pending' | 'confirmed' | 'cancelled' | 'rejected'
     user: {
       name: string
       email: string
       phone: string
     }
   }>
+  createdAt?: string
+  updatedAt?: string
+  owner?: {
+    id: string
+    name: string
+    email: string
+  }
 }
 
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000'
@@ -141,11 +155,46 @@ export const api = {
     })
   },
   async createListing(token: string, payload: Partial<Listing> & { price: number }) {
-    return http<{ success: true; data: Listing }>(`/api/v1/listings`, {
+    return http<Listing>('/api/v1/listings', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: JSON.stringify(payload)
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
     })
+  },
+  async uploadListingImages(token: string, listingId: string, files: File[]) {
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append('images', file);
+    });
+
+    const response = await fetch(`${API_URL}/api/v1/listings/${listingId}/images`, {
+      method: 'POST',
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        // Don't set Content-Type header - let the browser set it with the correct boundary
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'Failed to upload images');
+    }
+
+    return response.json();
+  },
+  async deleteListingImage(token: string, listingId: string, imageUrl: string) {
+    return http(`/api/v1/listings/${listingId}/images`, {
+      method: 'DELETE',
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ imageUrl }),
+    });
   },
   async updateListing(token: string, id: string, payload: Partial<Listing>) {
     return http<{ success: true; data: Listing }>(`/api/v1/listings/${id}`, {

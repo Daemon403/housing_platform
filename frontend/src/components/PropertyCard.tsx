@@ -1,9 +1,15 @@
 import { Link } from 'react-router-dom';
 import type { Listing } from '../api/client';
+import { ImageSlideshow } from './ImageSlideshow';
 import styles from '../styles/propertyCard.module.css';
 
+type PropertyCardListing = Omit<Listing, 'images' | 'address'> & {
+  images?: string[];
+  address: string | { street?: string; city?: string; state?: string; postalCode?: string; country?: string };
+};
+
 interface PropertyCardProps {
-  listing: Listing;
+  listing: PropertyCardListing;
   showBookings?: boolean;
   showActions?: boolean;
   onDelete?: (id: string) => void;
@@ -15,31 +21,71 @@ export function PropertyCard({
   showActions = true,
   onDelete 
 }: PropertyCardProps) {
-  const formatAddress = (address: string | any) => {
+  const formatAddress = (address: string | { street?: string; city?: string; state?: string; postalCode?: string; country?: string } | undefined): string => {
     if (!address) return 'No address provided';
     if (typeof address === 'string') return address;
     
-    const { street = '', city = '', state = '', country = '', postalCode = '' } = address;
-    const parts = [];
-    
+    // Handle Address object
+    const { street, city, state, postalCode, country } = address;
+    const parts: string[] = [];
     if (street) parts.push(street);
     if (city) parts.push(city);
     if (state) parts.push(state);
     if (postalCode) parts.push(postalCode);
     if (country) parts.push(country);
     
-    return parts.join(', ');
+    return parts.length > 0 ? parts.join(', ') : 'No address provided';
   };
 
   const formattedAddress = formatAddress(listing.address);
 
+  // Convert file paths to HTTP URLs if needed
+  const processImageUrl = (url: string) => {
+    if (!url) return '';
+    
+    // If it's already a full URL, return as is
+    if (url.startsWith('http') || url.startsWith('//')) {
+      return url;
+    }
+    
+    // If it's a relative path starting with 'uploads/', just prepend the API URL
+    if (url.startsWith('uploads/')) {
+      return `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/${url}`;
+    }
+    
+    // For any other relative path, assume it's in the uploads directory
+    const cleanPath = url.replace(/^[\\/]*(uploads[\\/])?/, 'uploads/');
+    return `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/${cleanPath}`;
+  };
+
+  // Create a simple placeholder image as a data URL
+  const fallbackImage = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNTAwIiB2aWV3Qm94PSIwIDAgODAwIDUwMCI+CiAgPHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iI2Y1ZjVmNSIvPgogIDx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjQiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5ObSBJbWFnZSBBdmFpbGFibGU8L3RleHQ+Cjwvc3ZnPg==';
+  
+  // Get a random image from the available images, or use fallback
+  const getRandomImage = (images: string[]) => {
+    if (!images || images.length === 0) return fallbackImage;
+    const randomIndex = Math.floor(Math.random() * images.length);
+    return processImageUrl(images[randomIndex]);
+  };
+
+  // Use a single random image for the card
+  const displayImage = (listing.images && listing.images.length > 0)
+    ? getRandomImage(listing.images)
+    : fallbackImage;
+
+  // Keep images as an array for the slideshow component
+  const images = [displayImage];
+
   return (
     <div className={styles.card}>
-      <img 
-        src={listing.images?.[0] || 'https://via.placeholder.com/400x300?text=No+Image'} 
-        alt={listing.title} 
-        className={styles.image}
-      />
+      <div className={styles.imageContainer}>
+        <ImageSlideshow images={images} className={styles.slideshow} />
+        {listing.status && (
+          <div className={`${styles.statusBadge} ${styles[listing.status] || ''}`}>
+            {listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}
+          </div>
+        )}
+      </div>
       <div className={styles.content}>
         <div className={styles.header}>
           <h3 className={styles.title}>
@@ -51,9 +97,6 @@ export function PropertyCard({
           </div>
         </div>
 
-        <div className={`${styles.status} ${styles[listing.status || 'available']}`}>
-          {listing.status || 'Available'}
-        </div>
 
         <div className={styles.price}>
           ${listing.price?.toLocaleString()}
@@ -122,17 +165,21 @@ export function PropertyCard({
             </div>
           )}
             <div className={styles.actions}>
-              <Link to={`/owner/listings/${listing.id}/edit`} className={`${styles.button} ${styles.primary}`}>
-                <i className="fas fa-edit"></i> Manage
-              </Link>
-              {onDelete && (
-                <button 
-                  className={`${styles.button} ${styles.danger}`}
-                  onClick={() => onDelete(listing.id)}
-                  title="Delete Property"
-                >
-                  <i className="fas fa-trash"></i>
-                </button>
+              {listing.id && (
+                <>
+                  <Link to={`/owner/listings/${listing.id}/edit`} className={`${styles.button} ${styles.primary}`}>
+                    <i className="fas fa-edit"></i> Manage
+                  </Link>
+                  {onDelete && (
+                    <button 
+                      className={`${styles.button} ${styles.danger}`}
+                      onClick={() => listing.id && onDelete(listing.id)}
+                      title="Delete Property"
+                    >
+                      <i className="fas fa-trash"></i>
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>

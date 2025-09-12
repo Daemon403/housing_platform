@@ -9,6 +9,7 @@
   height: 100%;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .card:hover {
@@ -16,11 +17,56 @@
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
 }
 
-.image {
+.imageContainer {
+  position: relative;
   width: 100%;
-  height: 200px;
-  object-fit: cover;
+  height: 0;
+  padding-bottom: 56.25%; /* 16:9 aspect ratio */
+  overflow: hidden;
+  background-color: #f5f5f5;
+}
+
+.slideshow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   border-bottom: 1px solid #eee;
+}
+
+.statusBadge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  z-index: 10;
+}
+
+.statusBadge.active {
+  background-color: #10b981; /* Green for active */
+}
+
+.statusBadge.pending {
+  background-color: #f59e0b; /* Yellow for pending */
+}
+
+.statusBadge.inactive {
+  background-color: #6b7280; /* Gray for inactive */
+}
+
+.statusBadge.rejected {
+  background-color: #ef4444; /* Red for rejected */
+}
+
+.statusBadge.sold {
+  background-color: #8b5cf6; /* Purple for sold */
 }
 
 .content {

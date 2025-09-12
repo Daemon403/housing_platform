@@ -55,8 +55,25 @@ app.use(cors({
   credentials: true
 }));
 
-// Set static folder
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static files with proper path resolution
+const publicPath = path.resolve(__dirname, 'public');
+app.use(express.static(publicPath));
+
+// Serve uploaded files with proper caching and path resolution
+const uploadsPath = path.join(publicPath, 'uploads');
+app.use('/uploads', express.static(uploadsPath, {
+  setHeaders: (res, filePath) => {
+    // Set proper cache control for uploaded files
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    
+    // Log file serving for debugging
+    console.log(`Serving file: ${filePath}`);
+  }
+}));
+
+// Log paths for debugging
+console.log('Public directory:', publicPath);
+console.log('Uploads directory:', uploadsPath);
 
 // Mount routers
 app.use('/api/v1/auth', authRoutes);

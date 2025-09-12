@@ -3,9 +3,12 @@ const path = require('path');
 const multer = require('multer');
 
 // Ensure upload directory exists
-const uploadDir = process.env.FILE_UPLOAD_PATH || path.join(__dirname, '..', 'public', 'uploads');
+const publicDir = path.resolve(__dirname, '..', 'public');
+const uploadDir = process.env.FILE_UPLOAD_PATH || path.join(publicDir, 'uploads');
+
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
+  console.log(`Created uploads directory: ${uploadDir}`);
 }
 
 // Multer storage config
@@ -15,9 +18,11 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname) || '';
+    const ext = path.extname(file.originalname).toLowerCase();
     const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
-    cb(null, `${base}-${unique}${ext}`);
+    const filename = `${base}-${unique}${ext}`;
+    console.log(`Saving file: ${filename}`);
+    cb(null, filename);
   }
 });
 

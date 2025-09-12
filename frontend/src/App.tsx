@@ -68,12 +68,33 @@ function ListingCard({ l }: { l: Listing }) {
   // Get the formatted address
   const formattedAddress = formatAddress(l.address);
 
+  // Create a simple placeholder image as a data URL
+  const fallbackImage = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgNDAwIDIwMCI+CiAgPHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iI2Y1ZjVmNSIvPgogIDx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBvY2N1cGF0aW9uPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk5vIEltYWdlIEF2YWlsYWJsZTwvdGV4dD4KPC9zdmc+';
+
+  // Process image URL
+  const processImageUrl = (url: string | undefined) => {
+    if (!url) return fallbackImage;
+    if (url.startsWith('http')) return url;
+    if (url.startsWith('data:')) return url;
+    if (url.startsWith('uploads/')) {
+      return `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/${url}`;
+    }
+    const cleanPath = url.replace(/^[\\/]*(uploads[\\/])?/, 'uploads/');
+    return `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/${cleanPath}`;
+  };
+
+  const imageUrl = l.images?.[0] ? processImageUrl(l.images[0]) : fallbackImage;
+
   return (
     <li className={styles.card}>
       <img 
-        src={l.images?.[0] || 'https://via.placeholder.com/400x200?text=No+Image'} 
+        src={imageUrl}
         alt={l.title} 
         className={styles.image}
+        onError={(e) => {
+          const target = e.target as HTMLImageElement;
+          target.src = fallbackImage;
+        }}
       />
       <div className={styles.content}>
         <div className={styles.header}>
@@ -277,11 +298,49 @@ function ListingDetailPage() {
 
           <div style={{ borderTop: '1px solid #eee', marginTop: 16, paddingTop: 16 }}>
             <h3>Favorites</h3>
-            {!token ? <p>Login to add to favorites.</p> : (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={async ()=>{ try{ await api.favorite(token!, listing.id); setFavMsg('Added to favorites') }catch{ setFavMsg('Failed') } }}>Add</button>
-                <button onClick={async ()=>{ try{ await api.unfavorite(token!, listing.id); setFavMsg('Removed from favorites') }catch{ setFavMsg('Failed') } }}>Remove</button>
-                {favMsg && <span>{favMsg}</span>}
+            {!token ? (
+              <p>Login to add to favorites.</p>
+            ) : !listing ? (
+              <p>Loading listing details...</p>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button 
+                  onClick={async () => { 
+                    if (!listing.id) {
+                      setFavMsg('Invalid listing ID');
+                      return;
+                    }
+                    try { 
+                      await api.favorite(token, listing.id); 
+                      setFavMsg('Added to favorites');
+                    } catch (error) { 
+                      console.error('Failed to add to favorites:', error);
+                      setFavMsg('Failed to add to favorites');
+                    } 
+                  }}
+                  style={{ padding: '8px 12px', cursor: 'pointer' }}
+                >
+                  Add to Favorites
+                </button>
+                <button 
+                  onClick={async () => { 
+                    if (!listing.id) {
+                      setFavMsg('Invalid listing ID');
+                      return;
+                    }
+                    try { 
+                      await api.unfavorite(token, listing.id); 
+                      setFavMsg('Removed from favorites');
+                    } catch (error) { 
+                      console.error('Failed to remove from favorites:', error);
+                      setFavMsg('Failed to remove from favorites');
+                    } 
+                  }}
+                  style={{ padding: '8px 12px', cursor: 'pointer' }}
+                >
+                  Remove from Favorites
+                </button>
+                {favMsg && <span style={{ marginLeft: '10px', color: '#666' }}>{favMsg}</span>}
               </div>
             )}
           </div>

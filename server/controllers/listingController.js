@@ -23,13 +23,31 @@ exports.getListings = asyncHandler(async (req, res) => {
     order: [['createdAt', 'DESC']]
   });
 
+  // Process image URLs
+  const processedListings = listings.map(listing => {
+    const listingJson = listing.toJSON();
+    if (listingJson.images && Array.isArray(listingJson.images)) {
+      listingJson.images = listingJson.images.map(img => {
+        if (img && typeof img === 'string') {
+          // If it's already a full URL, return as is
+          if (img.startsWith('http')) return img;
+          // Otherwise, ensure it's a proper URL
+          const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
+          return `${baseUrl}/uploads/${img.replace(/^.*[\\/]/, '')}`;
+        }
+        return img;
+      });
+    }
+    return listingJson;
+  });
+
   res.status(200).json({
     success: true,
-    count: listings.length,
+    count: processedListings.length,
     total: count,
     totalPages: Math.ceil(count / limit),
     currentPage: parseInt(page),
-    data: listings
+    data: processedListings
   });
 });
 
@@ -49,8 +67,23 @@ exports.getListing = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Listing not found', 404));
   }
 
+  // Process image URLs
+  const listingJson = listing.toJSON();
+  if (listingJson.images && Array.isArray(listingJson.images)) {
+    listingJson.images = listingJson.images.map(img => {
+      if (img && typeof img === 'string') {
+        // If it's already a full URL, return as is
+        if (img.startsWith('http')) return img;
+        // Otherwise, ensure it's a proper URL
+        const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
+        return `${baseUrl}/uploads/${img.replace(/^.*[\\/]/, '')}`;
+      }
+      return img;
+    });
+  }
+
   await listing.increment('viewCount');
-  res.status(200).json({ success: true, data: listing });
+  res.status(200).json({ success: true, data: listingJson });
 });
 
 // @desc    Create listing
@@ -212,10 +245,47 @@ exports.addListingImages = asyncHandler(async (req, res, next) => {
   if (listing.ownerId !== req.user.id && req.user.role !== 'admin') {
     return next(new ErrorResponse('Not authorized', 401));
   }
-  const files = (req.files || []).map(f => f.location || f.path || f.filename || f.originalname).filter(Boolean);
+  
+  // Convert file paths to relative paths
+  const files = (req.files || []).map(f => {
+    const fullPath = f.location || f.path || f.filename || f.originalname;
+    console.log('Processing file upload:', fullPath);
+    
+    // If it's already a URL (like from S3), use as is
+    if (fullPath.startsWith('http')) {
+      return fullPath;
+    }
+    
+    // Convert to relative path if it's a local file
+    const relativePath = fullPath
+      .replace(/^.*[\\/]public[\\/]/, '') // Remove path up to /public/
+      .replace(/^.*[\\/]uploads[\\/]/, '') // Remove path up to /uploads/
+      .replace(/\\/g, '/'); // Convert backslashes to forward slashes
+      
+    console.log('Converted to relative path:', relativePath);
+    return relativePath;
+  }).filter(Boolean);
+  
   const images = [...(listing.images || []), ...files];
   await listing.update({ images });
-  res.status(200).json({ success: true, data: listing });
+  
+  // Get the updated listing with processed URLs
+  const updatedListing = await db.Listing.findByPk(req.params.id);
+  const listingJson = updatedListing.toJSON();
+  
+  // Process image URLs for the response
+  if (listingJson.images && Array.isArray(listingJson.images)) {
+    listingJson.images = listingJson.images.map(img => {
+      if (img && typeof img === 'string') {
+        if (img.startsWith('http')) return img;
+        const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
+        return `${baseUrl}/uploads/${img.replace(/^.*[\\/]/, '')}`;
+      }
+      return img;
+    });
+  }
+  
+  res.status(200).json({ success: true, data: listingJson });
 });
 
 // @desc    Delete image from listing
