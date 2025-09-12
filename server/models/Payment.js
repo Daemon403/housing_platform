@@ -188,15 +188,26 @@ module.exports = (sequelize) => {
   };
   
   // Hooks
-  Payment.afterUpdate(async (payment, options) => {
-    if (payment.changed('status') && payment.status === 'succeeded') {
-      // Update related booking status if needed
-      if (payment.bookingId) {
-        const booking = await payment.sequelize.models.Booking.findByPk(payment.bookingId);
-        if (booking && booking.status === 'pending_payment') {
-          await booking.update({ status: 'confirmed' });
-        }
-      }
+  Payment.afterUpdate(async (payment) => {
+    if (!payment.changed('status')) return;
+
+    if (!payment.bookingId) return;
+
+    const Booking = payment.sequelize.models.Booking;
+    const booking = await Booking.findByPk(payment.bookingId);
+    if (!booking) return;
+
+    // Map payment.status to booking.paymentStatus
+    const map = {
+      succeeded: 'paid',
+      refunded: 'refunded',
+      partially_refunded: 'partially_refunded',
+      failed: 'failed'
+    };
+
+    const nextPaymentStatus = map[payment.status];
+    if (nextPaymentStatus) {
+      await booking.update({ paymentStatus: nextPaymentStatus });
     }
   });
 

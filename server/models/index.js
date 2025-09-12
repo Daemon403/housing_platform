@@ -23,9 +23,16 @@ const models = {
   User: require('./User')(sequelize, Sequelize.DataTypes),
   Listing: require('./Listing')(sequelize, Sequelize.DataTypes),
   Booking: require('./Booking')(sequelize, Sequelize.DataTypes),
+  Payment: require('./Payment')(sequelize, Sequelize.DataTypes),
   Review: require('./Review')(sequelize, Sequelize.DataTypes),
+  Conversation: require('./Conversation')(sequelize, Sequelize.DataTypes),
+  Message: require('./Message')(sequelize, Sequelize.DataTypes),
   MaintenanceRequest: require('./MaintenanceRequest')(sequelize, Sequelize.DataTypes),
-  Message: require('./Message')(sequelize, Sequelize.DataTypes)
+  // Additional models referenced by associations
+  Refund: require('./Refund')(sequelize, Sequelize.DataTypes),
+  Dispute: require('./Dispute')(sequelize, Sequelize.DataTypes),
+  MessageAttachment: require('./MessageAttachment')(sequelize, Sequelize.DataTypes),
+  MaintenanceUpdate: require('./MaintenanceUpdate')(sequelize, Sequelize.DataTypes)
 };
 
 // Initialize models
@@ -40,3 +47,4 @@ db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 
 module.exports = db;
+

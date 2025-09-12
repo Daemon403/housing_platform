@@ -122,8 +122,9 @@ module.exports = (sequelize) => {
       type: DataTypes.JSONB,
       allowNull: false
     },
+    // Store location as JSON { lat: number, lng: number } to avoid PostGIS dependency
     location: {
-      type: DataTypes.GEOMETRY('POINT'),
+      type: DataTypes.JSONB,
       allowNull: false
     },
     images: {
@@ -164,8 +165,7 @@ module.exports = (sequelize) => {
     tableName: 'listings',
     indexes: [
       {
-        fields: ['location'],
-        using: 'GIST'
+        fields: ['location']
       },
       {
         fields: ['status']

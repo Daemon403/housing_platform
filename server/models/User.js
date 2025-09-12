@@ -74,6 +74,15 @@ module.exports = (sequelize) => {
     status: {
       type: DataTypes.ENUM('active', 'suspended', 'banned'),
       defaultValue: 'active'
+    },
+    // Aggregated fields updated by Review hooks
+    rating: {
+      type: DataTypes.FLOAT,
+      defaultValue: 0
+    },
+    reviewCount: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0
     }
   }, {
     timestamps: true,
