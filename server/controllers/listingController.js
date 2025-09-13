@@ -347,17 +347,136 @@ exports.checkAvailability = asyncHandler(async (req, res, next) => {
   if (!startDate || !endDate) {
     return next(new ErrorResponse('startDate and endDate are required', 400));
   }
-  const conflicts = await db.Booking.count({
+  
+  // Find any conflicting bookings
+  const conflicts = await db.Booking.findAll({
     where: {
       listingId: req.params.id,
-      status: { [Op.in]: ['approved', 'active'] },
+      status: { [Op.in]: ['approved', 'active', 'confirmed'] },
       [Op.and]: [
         { startDate: { [Op.lte]: endDate } },
         { endDate: { [Op.gte]: startDate } }
       ]
-    }
+    },
+    order: [['startDate', 'ASC']],
+    attributes: ['startDate', 'endDate']
   });
-  res.status(200).json({ success: true, available: conflicts === 0 });
+
+  // If no conflicts, dates are available
+  if (conflicts.length === 0) {
+    return res.status(200).json({ 
+      success: true, 
+      available: true,
+      message: 'The selected dates are available.'
+    });
+  }
+
+  // Find the next available date range
+  const today = new Date();
+  const next90Days = new Date();
+  next90Days.setDate(today.getDate() + 90);
+  
+  // Get all bookings in the next 90 days
+  const upcomingBookings = await db.Booking.findAll({
+    where: {
+      listingId: req.params.id,
+      status: { [Op.in]: ['approved', 'active', 'confirmed'] },
+      startDate: { [Op.gte]: today },
+      endDate: { [Op.lte]: next90Days }
+    },
+    order: [['startDate', 'ASC']],
+    attributes: ['startDate', 'endDate']
+  });
+
+  // Find available date ranges
+  const availableRanges = [];
+  let currentDate = new Date(today);
+  
+  // If there are no upcoming bookings, the entire range is available
+  if (upcomingBookings.length === 0) {
+    availableRanges.push({
+      startDate: today.toISOString().split('T')[0],
+      endDate: next90Days.toISOString().split('T')[0]
+    });
+  } else {
+    // Check before first booking
+    const firstBooking = new Date(upcomingBookings[0].startDate);
+    if (currentDate < firstBooking) {
+      const dayBeforeFirstBooking = new Date(firstBooking);
+      dayBeforeFirstBooking.setDate(dayBeforeFirstBooking.getDate() - 1);
+      availableRanges.push({
+        startDate: currentDate.toISOString().split('T')[0],
+        endDate: dayBeforeFirstBooking.toISOString().split('T')[0]
+      });
+    }
+
+    // Check between bookings
+    for (let i = 0; i < upcomingBookings.length - 1; i++) {
+      const currentEnd = new Date(upcomingBookings[i].endDate);
+      const nextStart = new Date(upcomingBookings[i + 1].startDate);
+      
+      // If there's at least one day between bookings
+      if (currentEnd < nextStart) {
+        const availableStart = new Date(currentEnd);
+        availableStart.setDate(availableStart.getDate() + 1);
+        const availableEnd = new Date(nextStart);
+        availableEnd.setDate(availableEnd.getDate() - 1);
+        
+        availableRanges.push({
+          startDate: availableStart.toISOString().split('T')[0],
+          endDate: availableEnd.toISOString().split('T')[0]
+        });
+      }
+    }
+
+    // Check after last booking
+    const lastBooking = new Date(upcomingBookings[upcomingBookings.length - 1].endDate);
+    if (lastBooking < next90Days) {
+      const dayAfterLastBooking = new Date(lastBooking);
+      dayAfterLastBooking.setDate(dayAfterLastBooking.getDate() + 1);
+      availableRanges.push({
+        startDate: dayAfterLastBooking.toISOString().split('T')[0],
+        endDate: next90Days.toISOString().split('T')[0]
+      });
+    }
+  }
+
+  // Find the next available date range that can accommodate the requested duration
+  const requestedStart = new Date(startDate);
+  const requestedEnd = new Date(endDate);
+  const requestedNights = Math.ceil((requestedEnd - requestedStart) / (1000 * 60 * 60 * 24));
+  
+  let nextAvailableDates = null;
+  for (const range of availableRanges) {
+    const rangeStart = new Date(range.startDate);
+    const rangeEnd = new Date(range.endDate);
+    const availableNights = Math.ceil((rangeEnd - rangeStart) / (1000 * 60 * 60 * 24));
+    
+    if (availableNights >= requestedNights) {
+      nextAvailableDates = {
+        startDate: range.startDate,
+        endDate: new Date(rangeStart.getTime() + (requestedNights * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]
+      };
+      break;
+    }
+  }
+
+  // If no range is long enough, find the next available date range with at least 1 night
+  if (!nextAvailableDates && availableRanges.length > 0) {
+    const firstRange = availableRanges[0];
+    nextAvailableDates = {
+      startDate: firstRange.startDate,
+      endDate: firstRange.startDate
+    };
+  }
+
+  res.status(200).json({ 
+    success: true, 
+    available: false,
+    message: 'The selected dates are not available.',
+    nextAvailableDates,
+    availableRanges: availableRanges.slice(0, 3) // Return up to 3 available ranges
+  });
 });
 
 // @desc    Get category stats counts

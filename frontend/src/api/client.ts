@@ -115,16 +115,55 @@ export const api = {
     const data = await http<{ data: Listing[]; pagination: any }>(`/api/v1/listings/nearby?${q.toString()}`)
     return data
   },
-  async checkAvailability(listingId: string, startDate: string, endDate: string) {
-    const q = new URLSearchParams({ startDate, endDate })
-    return http<{ success: true; available: boolean }>(`/api/v1/listings/${listingId}/availability?${q.toString()}`)
+  async checkAvailability(
+    listingId: string, 
+    startDate: string, 
+    endDate: string
+  ): Promise<{
+    success: boolean;
+    available: boolean;
+    message: string;
+    nextAvailableDates?: { startDate: string; endDate: string };
+    availableRanges?: Array<{ startDate: string; endDate: string }>;
+  }> {
+    const q = new URLSearchParams({ startDate, endDate });
+    const response = await http<{
+      success: boolean;
+      available: boolean;
+      message: string;
+      nextAvailableDates?: { startDate: string; endDate: string };
+      availableRanges?: Array<{ startDate: string; endDate: string }>;
+    }>(`/api/v1/listings/${listingId}/availability?${q.toString()}`);
+    
+    return response;
   },
   async createBooking(token: string, payload: { listingId: string; startDate: string; endDate: string; guests: number; totalPrice: number; paymentMethod?: string }) {
-    return http<{ success: true; data: any }>(`/api/v1/bookings`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: JSON.stringify(payload)
-    })
+    try {
+      const response = await fetch(`${API_URL}/api/v1/bookings`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json().catch(() => ({}));
+      
+      if (!response.ok) {
+        // If we have error details from the server, include them in the error
+        const errorMessage = data.message || data.error || 'Failed to create booking';
+        const error = new Error(errorMessage);
+        (error as any).status = response.status;
+        (error as any).details = data.details || {};
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('API Error:', error);
+      throw error; // Re-throw to be handled by the caller
+    }
   },
   async getMyBookings(token: string) {
     return http<{ success: true; data: any[] }>(`/api/v1/bookings/my-bookings`, {

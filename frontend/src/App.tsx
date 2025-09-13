@@ -2,7 +2,7 @@ import { Link, Navigate, Route, Routes, useSearchParams, useParams } from 'react
 import { useEffect, useState } from 'react'
 import './App.css'
 import './styles/index.css' // Our new unified styles
-import { api, type Listing, type Address } from './api/client'
+import { api, type Listing } from './api/client'
 import { PropertyCard } from './components/PropertyCard'
 // CSS modules removed in favor of utility classes
 import { FilterBar, type Filters } from './components/FilterBar'
@@ -287,8 +287,16 @@ function ListingDetailPage() {
   const { token } = useAuth()
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [availability, setAvailability] = useState<{available: boolean; message: string} | null>(null)
-  const [bookingMsg, setBookingMsg] = useState<string>('')
+  const [guests, setGuests] = useState(1)
+  const [isBooking, setIsBooking] = useState(false)
+  const [isCheckingAvailability, setIsCheckingAvailability] = useState(false)
+  const [availability, setAvailability] = useState<{
+    available: boolean;
+    message: string;
+    nextAvailableDates?: { startDate: string; endDate: string };
+    availableRanges?: Array<{ startDate: string; endDate: string }>;
+  } | null>(null)
+  const [bookingMsg, setBookingMsg] = useState<{type: 'success' | 'error', message: string | React.ReactNode} | null>(null)
   const [favMsg, setFavMsg] = useState('')
   useEffect(() => {
     if (!id) return
@@ -325,52 +333,263 @@ function ListingDetailPage() {
             <p>Amenities: {listing.amenities.join(', ')}</p>
           )}
 
-          <div style={{ borderTop: '1px solid #eee', marginTop: 16, paddingTop: 16 }}>
-            <h3>Availability</h3>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input type="date" value={startDate} onChange={(e)=>setStartDate(e.target.value)} />
-              <input type="date" value={endDate} onChange={(e)=>setEndDate(e.target.value)} />
-              <button onClick={async () => {
-                if (!id || !startDate || !endDate) return
-                try {
-                  const response = await api.checkAvailability(id, startDate, endDate)
-                  setAvailability({
-                    available: response.available,
-                    message: response.available ? 'Available' : 'Not available for the selected dates'
-                  })
-                } catch (error: any) {
-                  setAvailability({
-                    available: false,
-                    message: 'Error checking availability: ' + (error.message || 'Unknown error')
-                  })
-                }
-              }}>Check</button>
+          <div className="mt-6 border-t border-gray-200 pt-4">
+            <h3 className="text-lg font-medium mb-3">Check Availability</h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label htmlFor="checkInDate" className="block text-sm font-medium text-gray-700 mb-1">Check-in</label>
+                  <input 
+                    id="checkInDate"
+                    type="date" 
+                    value={startDate} 
+                    min={new Date().toISOString().split('T')[0]}
+                    onChange={e => setStartDate(e.target.value)} 
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="checkOutDate" className="block text-sm font-medium text-gray-700 mb-1">Check-out</label>
+                  <input 
+                    id="checkOutDate"
+                    type="date" 
+                    value={endDate} 
+                    min={startDate || new Date().toISOString().split('T')[0]}
+                    onChange={e => setEndDate(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button 
+                    className="px-4 py-2 bg-primary-600 text-white font-medium rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={!startDate || !endDate || isCheckingAvailability}
+                    onClick={async () => {
+                      if (!id || !startDate || !endDate) return;
+                      setIsCheckingAvailability(true);
+                      try {
+                        const res = await api.checkAvailability(id, startDate, endDate);
+                        setAvailability(res);
+                      } catch (error) {
+                        console.error('Error checking availability:', error);
+                        setAvailability({
+                          available: false,
+                          message: 'Error checking availability. Please try again.'
+                        });
+                      } finally {
+                        setIsCheckingAvailability(false);
+                      }
+                    }}
+                  >
+                    {isCheckingAvailability ? 'Checking...' : 'Check Availability'}
+                  </button>
+                </div>
+              </div>
+              
               {availability && (
-                <span style={{ color: availability.available ? 'green' : 'red' }}>
-                  {availability.message}
-                </span>
+                <div className={`p-3 rounded-md ${
+                  availability.available 
+                    ? 'bg-green-50 text-green-800' 
+                    : 'bg-yellow-50 text-yellow-800'
+                }`}>
+                  <p className="font-medium">{availability.message}</p>
+                  
+                  {!availability.available && availability.nextAvailableDates && (
+                    <div className="mt-2">
+                      <p className="text-sm">Next available dates:</p>
+                      <button
+                        onClick={() => {
+                          setStartDate(availability.nextAvailableDates!.startDate);
+                          setEndDate(availability.nextAvailableDates!.endDate);
+                        }}
+                        className="mt-1 text-sm font-medium text-primary-600 hover:text-primary-800 hover:underline"
+                      >
+                        {new Date(availability.nextAvailableDates.startDate).toLocaleDateString()} - {new Date(availability.nextAvailableDates.endDate).toLocaleDateString()}
+                      </button>
+                    </div>
+                  )}
+                  
+                  {!availability.available && availability.availableRanges && availability.availableRanges.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-sm">Other available date ranges:</p>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {availability.availableRanges.map((range, index) => (
+                          <button
+                            key={index}
+                            onClick={() => {
+                              setStartDate(range.startDate);
+                              // Set end date to 1 day after start by default
+                              const end = new Date(range.startDate);
+                              end.setDate(end.getDate() + 1);
+                              setEndDate(end.toISOString().split('T')[0]);
+                            }}
+                            className="text-xs px-2 py-1 bg-white bg-opacity-50 rounded border border-gray-300 hover:bg-gray-100"
+                          >
+                            {new Date(range.startDate).toLocaleDateString()}
+                            {range.startDate !== range.endDate && ` - ${new Date(range.endDate).toLocaleDateString()}`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
 
-          <div style={{ borderTop: '1px solid #eee', marginTop: 16, paddingTop: 16 }}>
-            <h3>Book this place</h3>
-            {!token && <p>Please <Link to="/login">login</Link> to request a booking.</p>}
-            {token && (
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input type="date" value={startDate} onChange={(e)=>setStartDate(e.target.value)} />
-                <input type="date" value={endDate} onChange={(e)=>setEndDate(e.target.value)} />
-                <input type="number" placeholder="Guests" min={1} defaultValue={1} id="guests" />
-                <button onClick={async ()=>{
-                  const guests = Number((document.getElementById('guests') as HTMLInputElement).value || '1')
-                  if (!id || !startDate || !endDate) { setBookingMsg('Pick dates'); return }
-                  try{
-                    const totalPrice = Number(listing.price) || 0
-                    await api.createBooking(token, { listingId: id, startDate, endDate, guests, totalPrice })
-                    setBookingMsg('Booking requested!')
-                  }catch(e:any){ setBookingMsg('Booking failed') }
-                }}>Request Booking</button>
-                {bookingMsg && <span>{bookingMsg}</span>}
+          <div className="border-t border-gray-200 mt-4 pt-4">
+            <h3 className="text-lg font-medium mb-3">Book this place</h3>
+            {!token ? (
+              <p className="text-gray-600">
+                Please <Link to="/login" className="text-primary-600 hover:underline">login</Link> to request a booking.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">Check-in</label>
+                    <input 
+                      id="startDate"
+                      type="date" 
+                      value={startDate} 
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setStartDate(e.target.value)} 
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-1">Check-out</label>
+                    <input 
+                      id="endDate"
+                      type="date" 
+                      value={endDate} 
+                      min={startDate || new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setEndDate(e.target.value)} 
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="guests" className="block text-sm font-medium text-gray-700 mb-1">Guests</label>
+                    <input 
+                      type="number" 
+                      id="guests"
+                      min={1} 
+                      max={listing.maxOccupants || 10}
+                      value={guests}
+                      onChange={(e) => setGuests(parseInt(e.target.value) || 1)}
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    />
+                  </div>
+                </div>
+
+                {bookingMsg && (
+                  <div className={`p-3 rounded-md ${bookingMsg.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+                    {bookingMsg.message}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-2">
+                  <div className="text-lg font-medium">
+                    {listing.price ? `$${listing.price} / night` : 'Price not available'}
+                  </div>
+                  <button 
+                    onClick={async () => {
+                      if (!id || !startDate || !endDate) { 
+                        setBookingMsg({type: 'error', message: 'Please select check-in and check-out dates'}); 
+                        return; 
+                      }
+                      
+                      if (new Date(startDate) >= new Date(endDate)) {
+                        setBookingMsg({type: 'error', message: 'Check-out date must be after check-in date'});
+                        return;
+                      }
+                      setIsBooking(true);
+                      setBookingMsg(null);
+                      
+                      try {
+                        // Validate dates first
+                        const start = new Date(startDate);
+                        const end = new Date(endDate);
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+
+                        if (start < today) {
+                          throw new Error('Check-in date cannot be in the past');
+                        }
+                        if (end <= start) {
+                          throw new Error('Check-out date must be after check-in date');
+                        }
+
+                        // Check availability
+                        const availability = await api.checkAvailability(id, startDate, endDate);
+                        
+                        if (!availability.available) {
+                          if (availability.nextAvailableDates) {
+                            throw new Error(
+                              `The selected dates are not available. Next available: ${new Date(availability.nextAvailableDates.startDate).toLocaleDateString()} - ${new Date(availability.nextAvailableDates.endDate).toLocaleDateString()}`
+                            );
+                          } else {
+                            throw new Error('The selected dates are not available. Please try different dates.');
+                          }
+                        }
+
+                        // Calculate total price
+                        const numNights = Math.ceil(
+                          (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
+                        ) || 1;
+                        const totalPrice = Number(listing.price) * numNights;
+                        
+                        // Create the booking
+                        await api.createBooking(token, { 
+                          listingId: id, 
+                          startDate: start.toISOString().split('T')[0],
+                          endDate: end.toISOString().split('T')[0],
+                          guests,
+                          totalPrice
+                        });
+                        
+                        setBookingMsg({
+                          type: 'success', 
+                          message: 'Booking requested successfully! We\'ll get back to you soon.'
+                        });
+                        setStartDate('');
+                        setEndDate('');
+                        setGuests(1);
+                      } catch (e: any) {
+                        console.error('Booking error:', e);
+                        let errorMessage = 'Failed to process your booking. ';
+                        
+                        // Handle different types of errors
+                        if (e.status === 400) {
+                          if (e.details && Array.isArray(e.details)) {
+                            // Handle validation errors from the server
+                            errorMessage += e.details.map((d: any) => d.message).join(' ');
+                          } else if (e.message.includes('not available')) {
+                            errorMessage = e.message;
+                          } else {
+                            errorMessage += 'Please check your input and try again.';
+                          }
+                        } else if (e.status === 409) {
+                          errorMessage = 'You already have a booking for these dates.';
+                        } else if (e.message) {
+                          errorMessage = e.message;
+                        } else {
+                          errorMessage += 'Please try again later.';
+                        }
+                        
+                        setBookingMsg({
+                          type: 'error',
+                          message: errorMessage
+                        });
+                      } finally {
+                        setIsBooking(false);
+                      }
+                    }}
+                    disabled={isBooking}
+                    className="px-6 py-2 bg-primary-600 text-white font-medium rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isBooking ? 'Processing...' : 'Request to Book'}
+                  </button>
+                </div>
               </div>
             )}
           </div>
