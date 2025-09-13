@@ -139,6 +139,25 @@ export const api = {
   },
   async createBooking(token: string, payload: { listingId: string; startDate: string; endDate: string; guests: number; totalPrice: number; paymentMethod?: string }) {
     try {
+      // First, verify the listing is active
+      const listing = await this.getListing(payload.listingId);
+      
+      if (!listing || listing.status !== 'active') {
+        throw new Error('This listing is not currently available for booking. The listing may be inactive or under maintenance.');
+      }
+
+      // Then check availability
+      const availability = await this.checkAvailability(
+        payload.listingId,
+        payload.startDate,
+        payload.endDate
+      );
+
+      if (!availability.available) {
+        throw new Error(availability.message || 'The selected dates are no longer available. Please try different dates.');
+      }
+
+      // If all checks pass, create the booking
       const response = await fetch(`${API_URL}/api/v1/bookings`, {
         method: 'POST',
         headers: { 

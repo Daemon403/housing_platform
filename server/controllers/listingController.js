@@ -352,7 +352,7 @@ exports.checkAvailability = asyncHandler(async (req, res, next) => {
   const conflicts = await db.Booking.findAll({
     where: {
       listingId: req.params.id,
-      status: { [Op.in]: ['approved', 'active', 'confirmed'] },
+      status: { [Op.in]: ['approved', 'active'] }, // Removed 'confirmed' as it's not a valid status
       [Op.and]: [
         { startDate: { [Op.lte]: endDate } },
         { endDate: { [Op.gte]: startDate } }
@@ -380,7 +380,7 @@ exports.checkAvailability = asyncHandler(async (req, res, next) => {
   const upcomingBookings = await db.Booking.findAll({
     where: {
       listingId: req.params.id,
-      status: { [Op.in]: ['approved', 'active', 'confirmed'] },
+      status: { [Op.in]: ['approved', 'active'] }, // Removed 'confirmed' as it's not a valid status
       startDate: { [Op.gte]: today },
       endDate: { [Op.lte]: next90Days }
     },

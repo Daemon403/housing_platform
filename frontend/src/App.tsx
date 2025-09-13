@@ -506,7 +506,11 @@ function ListingDetailPage() {
                       setBookingMsg(null);
                       
                       try {
-                        // Validate dates first
+                        // Basic validation
+                        if (!startDate || !endDate) {
+                          throw new Error('Please select both check-in and check-out dates');
+                        }
+
                         const start = new Date(startDate);
                         const end = new Date(endDate);
                         const today = new Date();
@@ -517,19 +521,6 @@ function ListingDetailPage() {
                         }
                         if (end <= start) {
                           throw new Error('Check-out date must be after check-in date');
-                        }
-
-                        // Check availability
-                        const availability = await api.checkAvailability(id, startDate, endDate);
-                        
-                        if (!availability.available) {
-                          if (availability.nextAvailableDates) {
-                            throw new Error(
-                              `The selected dates are not available. Next available: ${new Date(availability.nextAvailableDates.startDate).toLocaleDateString()} - ${new Date(availability.nextAvailableDates.endDate).toLocaleDateString()}`
-                            );
-                          } else {
-                            throw new Error('The selected dates are not available. Please try different dates.');
-                          }
                         }
 
                         // Calculate total price
