@@ -1,0 +1,49 @@
+/* Main CSS entry point */
+
+/* 1. Design Tokens - CSS variables for consistent theming */
+@import './tokens.css';
+
+/* 2. Base Styles - Resets and element-level styles */
+@import './base.css';
+
+/* 3. Utility Classes - Helper classes for layout and styling */
+@import './utilities.css';
+
+/* 4. Component Styles - Styled UI components */
+@import './components.css';
+
+/* 5. Custom styles specific to this application */
+:root {
+  /* Add any app-specific CSS variables here */
+}
+
+/* Add any global styles that don't fit in other categories */
+body {
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Responsive typography */
+@media (max-width: 768px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+/* Print styles */
+@media print {
+  body {
+    background: white;
+    color: black;
+    font-size: 12pt;
+  }
+  
+  /* Hide elements that shouldn't print */
+  .no-print {
+    display: none !important;
+  }
+}

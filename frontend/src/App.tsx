@@ -1,6 +1,7 @@
 import { Link, Navigate, Route, Routes, useSearchParams, useParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import './App.css'
+import './styles/index.css' // Our new unified styles
 import { api, type Listing, type Address } from './api/client'
 import styles from './styles/propertyCard.module.css'
 import { FilterBar, type Filters } from './components/FilterBar'
@@ -12,12 +13,12 @@ import EditListing from './pages/EditListing';
 function Header() {
   const { user, logout } = useAuth()
   return (
-    <header style={{ borderBottom: '1px solid #eee', padding: '12px 16px', display: 'flex', gap: 16, alignItems: 'center' }}>
-      <Link to="/" style={{ fontWeight: 700, textDecoration: 'none' }}>Student Housing</Link>
-      <nav style={{ display: 'flex', gap: 12 }}>
-        <Link to="/search">Search</Link>
-        {user && <Link to="/bookings">My Bookings</Link>}
-        {user && user.role === 'homeowner' && <Link to="/owner">Owner Dashboard</Link>}
+    <header className="border-b border-gray-200 py-3 px-4 flex items-center gap-4">
+      <Link to="/" className="font-bold text-lg no-underline text-primary-700 hover:text-primary-800">Student Housing</Link>
+      <nav className="flex gap-3">
+        <Link to="/search" className="text-gray-700 hover:text-primary-600 transition-colors">Search</Link>
+        {user && <Link to="/bookings" className="text-gray-700 hover:text-primary-600 transition-colors">My Bookings</Link>}
+        {user?.role === 'homeowner' && <Link to="/owner" className="text-gray-700 hover:text-primary-600 transition-colors">Owner Dashboard</Link>}
       </nav>
       <div style={{ marginLeft: 'auto', opacity: 0.6, fontSize: 13 }}>API: {api.baseUrl}</div>
       <div style={{ marginLeft: 16 }}>
