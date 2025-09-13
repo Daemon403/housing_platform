@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react'
 import './App.css'
 import './styles/index.css' // Our new unified styles
 import { api, type Listing, type Address } from './api/client'
-import styles from './styles/propertyCard.module.css'
+import { PropertyCard } from './components/PropertyCard'
+// CSS modules removed in favor of utility classes
 import { FilterBar, type Filters } from './components/FilterBar'
 import { useAuth } from './context/AuthContext'
 import OwnerDashboard from './pages/OwnerDashboard';
@@ -20,18 +21,23 @@ function Header() {
         {user && <Link to="/bookings" className="text-gray-700 hover:text-primary-600 transition-colors">My Bookings</Link>}
         {user?.role === 'homeowner' && <Link to="/owner" className="text-gray-700 hover:text-primary-600 transition-colors">Owner Dashboard</Link>}
       </nav>
-      <div style={{ marginLeft: 'auto', opacity: 0.6, fontSize: 13 }}>API: {api.baseUrl}</div>
-      <div style={{ marginLeft: 16 }}>
+      <div className="ml-auto opacity-60 text-sm">API: {api.baseUrl}</div>
+      <div className="ml-4">
         {!user ? (
-          <>
-            <Link to="/login">Login</Link>
-            <span> · </span>
-            <Link to="/register">Register</Link>
-          </>
+          <div className="flex items-center gap-2">
+            <Link to="/login" className="text-primary-600 hover:text-primary-800 transition-colors">Login</Link>
+            <span className="text-gray-400">·</span>
+            <Link to="/register" className="text-primary-600 hover:text-primary-800 transition-colors">Register</Link>
+          </div>
         ) : (
           <>
-            <span style={{ marginRight: 8 }}>Hi, {user.name}</span>
-            <button onClick={logout}>Logout</button>
+            <span className="mr-2">Hi, {user.name}</span>
+            <button 
+              onClick={logout} 
+              className="ml-2 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-md transition-colors"
+            >
+              Logout
+            </button>
           </>
         )}
       </div>
@@ -41,121 +47,14 @@ function Header() {
 
 function Footer() {
   return (
-    <footer style={{ borderTop: '1px solid #eee', padding: 16, textAlign: 'center', marginTop: 24, fontSize: 13, opacity: 0.7 }}>
-      © {new Date().getFullYear()} Student Housing Platform
+    <footer className="border-t border-gray-200 py-4 text-center mt-6 text-sm text-gray-500">
+      Student Housing Platform &copy; {new Date().getFullYear()}
     </footer>
   )
 }
 
 function ListingCard({ l }: { l: Listing }) {
-  // Format the address based on its type
-  const formatAddress = (address: string | Address | undefined) => {
-    if (!address) return 'No address provided';
-    if (typeof address === 'string') return address;
-    
-    // If it's an Address object, format it into a string
-    const { street = '', city = '', state = '', country = '', postalCode = '' } = address;
-    const parts = [];
-    
-    if (street) parts.push(street);
-    if (city) parts.push(city);
-    if (state) parts.push(state);
-    if (postalCode) parts.push(postalCode);
-    if (country) parts.push(country);
-    
-    return parts.join(', ');
-  };
-  
-  // Get the formatted address
-  const formattedAddress = formatAddress(l.address);
-
-  // Create a simple placeholder image as a data URL
-  const fallbackImage = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgNDAwIDIwMCI+CiAgPHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iI2Y1ZjVmNSIvPgogIDx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBvY2N1cGF0aW9uPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk5vIEltYWdlIEF2YWlsYWJsZTwvdGV4dD4KPC9zdmc+';
-
-  // Process image URL
-  const processImageUrl = (url: string | undefined) => {
-    if (!url) return fallbackImage;
-    if (url.startsWith('http')) return url;
-    if (url.startsWith('data:')) return url;
-    if (url.startsWith('uploads/')) {
-      return `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/${url}`;
-    }
-    const cleanPath = url.replace(/^[\\/]*(uploads[\\/])?/, 'uploads/');
-    return `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/${cleanPath}`;
-  };
-
-  const imageUrl = l.images?.[0] ? processImageUrl(l.images[0]) : fallbackImage;
-
-  return (
-    <li className={styles.card}>
-      <img 
-        src={imageUrl}
-        alt={l.title} 
-        className={styles.image}
-        onError={(e) => {
-          const target = e.target as HTMLImageElement;
-          target.src = fallbackImage;
-        }}
-      />
-      <div className={styles.content}>
-        <div className={styles.header}>
-          <Link to={`/listing/${l.id}`} className={styles.title}>{l.title}</Link>
-          <div className={styles.address}>
-            <i className="fas fa-map-marker-alt"></i>
-            {formattedAddress}
-          </div>
-        </div>
-
-        <div className={`${styles.status} ${styles[l.status || 'available']}`}>
-          {l.status || 'Available'}
-        </div>
-
-        <div className={styles.price}>
-          ${l.price?.toLocaleString()}
-          <span>/month</span>
-        </div>
-
-        <div className={styles.details}>
-          <div className={styles.detailItem}>
-            <i className="fas fa-bed"></i>
-            <span>{l.bedrooms || 'N/A'} beds</span>
-          </div>
-          <div className={styles.detailItem}>
-            <i className="fas fa-bath"></i>
-            <span>{l.bathrooms || 'N/A'} baths</span>
-          </div>
-          {l.size && (
-            <div className={styles.detailItem}>
-              <i className="fas fa-ruler-combined"></i>
-              <span>{l.size} sqft</span>
-            </div>
-          )}
-        </div>
-
-        {(l.hasWifi || l.hasParking || l.hasKitchen || l.hasWasher || l.hasTv || l.hasAirConditioning || l.hasHeating || l.hasDesk) && (
-          <div className={styles.amenities}>
-            {l.hasWifi && <span className={styles.amenity}><i className="fas fa-wifi"></i> WiFi</span>}
-            {l.hasParking && <span className={styles.amenity}><i className="fas fa-parking"></i> Parking</span>}
-            {l.hasKitchen && <span className={styles.amenity}><i className="fas fa-utensils"></i> Kitchen</span>}
-            {l.hasWasher && <span className={styles.amenity}><i className="fas fa-tshirt"></i> Washer</span>}
-            {l.hasTv && <span className={styles.amenity}><i className="fas fa-tv"></i> TV</span>}
-            {l.hasAirConditioning && <span className={styles.amenity}><i className="fas fa-snowflake"></i> AC</span>}
-            {l.hasHeating && <span className={styles.amenity}><i className="fas fa-thermometer-three-quarters"></i> Heating</span>}
-            {l.hasDesk && <span className={styles.amenity}><i className="fas fa-laptop-house"></i> Workspace</span>}
-          </div>
-        )}
-
-        <div className={styles.footer}>
-          <Link to={`/listing/${l.id}`} className={`${styles.button} ${styles.primary}`}>
-            <i className="fas fa-eye"></i> View Details
-          </Link>
-          <button className={`${styles.button} ${styles.secondary}`}>
-            <i className="far fa-heart"></i>
-          </button>
-        </div>
-      </div>
-    </li>
-  )
+  return <PropertyCard listing={l} showActions={false} />;
 }
 
 function HomePage() {
@@ -182,21 +81,85 @@ function HomePage() {
   useEffect(() => { run() }, [page])
   useEffect(() => { setSearchParams(new URLSearchParams({ page: String(page) })) }, [page])
   return (
-    <main className="container">
-      <h1>Discover Housing</h1>
-      {loading && <p>Loading...</p>}
-      {error && <p style={{ color: 'crimson' }}>Error: {error}</p>}
-      {!loading && !error && (
-        <ul style={{ listStyle: 'none', padding: 0 }}>
-          {listings.map((l) => <ListingCard key={l.id} l={l} />)}
-          {listings.length === 0 && <li>No listings found.</li>}
-        </ul>
+    <main className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold text-gray-900 mb-8">Discover Student Housing</h1>
+      
+      {loading && (
+        <div className="flex justify-center items-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
+        </div>
       )}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button disabled={page<=1} onClick={() => setPage((p)=>p-1)}>Prev</button>
-        <span>Page {page}</span>
-        <button onClick={() => setPage((p)=>p+1)}>Next</button>
-      </div>
+      
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-700">
+                Error loading listings: {error}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {!loading && !error && (
+        <>
+          {listings.length > 0 ? (
+            <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {listings.map((l) => (
+                <li key={l.id}>
+                  <ListingCard l={l} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="text-center py-12">
+              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+              <h3 className="mt-2 text-lg font-medium text-gray-900">No listings found</h3>
+              <p className="mt-1 text-gray-500">Check back later for new student housing options.</p>
+            </div>
+          )}
+          
+          {(listings.length > 0 || page > 1) && (
+            <div className="mt-8 flex items-center justify-between">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className={`inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
+                  page <= 1
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                Previous
+              </button>
+              
+              <span className="text-sm text-gray-700">
+                Page <span className="font-medium">{page}</span>
+              </span>
+              
+              <button
+                onClick={() => setPage((p) => p + 1)}
+                disabled={listings.length < pageSize}
+                className={`inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
+                  listings.length < pageSize
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </main>
   )
 }
