@@ -1,3 +1,4 @@
+import React from 'react';
 import { Link } from 'react-router-dom';
 import type { Listing } from '../api/client';
 import { ImageSlideshow } from './ImageSlideshow';
@@ -40,46 +41,64 @@ export function PropertyCard({
   const formattedAddress = formatAddress(listing.address);
 
   // Convert file paths to HTTP URLs if needed
-  const processImageUrl = (url: string) => {
+  const processImageUrl = (url: string): string => {
     if (!url) return '';
     
     // If it's already a full URL, return as is
-    if (url.startsWith('http') || url.startsWith('//')) {
+    if (url.startsWith('http') || url.startsWith('//') || url.startsWith('data:')) {
       return url;
     }
     
-    // If it's a relative path starting with 'uploads/', just prepend the API URL
-    if (url.startsWith('uploads/')) {
-      return `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/${url}`;
+    // If it's a relative path, prepend the API URL
+    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    
+    // Handle different path formats
+    if (url.startsWith('/')) {
+      // Remove leading slash if present to prevent double slashes
+      return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
     }
     
-    // For any other relative path, assume it's in the uploads directory
-    const cleanPath = url.replace(/^[\\/]*(uploads[\\/])?/, 'uploads/');
-    return `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/${cleanPath}`;
+    // Handle paths that might be missing the uploads prefix
+    if (!url.startsWith('uploads/')) {
+      return `${baseUrl}/uploads/${url}`;
+    }
+    
+    return `${baseUrl}/${url}`;
   };
 
-  // Create a simple placeholder image as a data URL
-  const fallbackImage = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNTAwIiB2aWV3Qm94PSIwIDAgODAwIDUwMCI+CiAgPHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iI2Y1ZjVmNSIvPgogIDx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjQiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5ObSBJbWFnZSBBdmFpbGFibGU8L3RleHQ+Cjwvc3ZnPg==';
+  // Path to the placeholder image in the public directory
+  const fallbackImage = '/images/placeholder.png';
   
-  // Get a random image from the available images, or use fallback
-  const getRandomImage = (images: string[]) => {
-    if (!images || images.length === 0) return fallbackImage;
-    const randomIndex = Math.floor(Math.random() * images.length);
-    return processImageUrl(images[randomIndex]);
-  };
-
-  // Use a single random image for the card
-  const displayImage = (listing.images && listing.images.length > 0)
-    ? getRandomImage(listing.images)
-    : fallbackImage;
-
-  // Keep images as an array for the slideshow component
-  const images = [displayImage];
+  // Process all available images, filtering out any invalid ones
+  const processedImages = React.useMemo(() => {
+    if (!listing.images || !Array.isArray(listing.images) || listing.images.length === 0) {
+      return [fallbackImage];
+    }
+    
+    // Process and filter images
+    return listing.images
+      .map(img => {
+        try {
+          const processed = processImageUrl(img);
+          return processed || null;
+        } catch (e) {
+          console.warn('Failed to process image URL:', img, e);
+          return null;
+        }
+      })
+      .filter((img): img is string => Boolean(img));
+  }, [listing.images]);
+  
+  // No need for displayImage since we're using the slideshow component
 
   return (
     <div className={styles.card}>
       <div className={styles.imageContainer}>
-        <ImageSlideshow images={images} className={styles.slideshow} />
+        <ImageSlideshow 
+          images={processedImages} 
+          className={styles.slideshow} 
+          interval={processedImages.length > 1 ? 5000 : 0}
+        />
         {listing.status && (
           <div className={`${styles.statusBadge} ${styles[listing.status] || ''}`}>
             {listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}
