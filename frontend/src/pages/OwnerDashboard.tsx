@@ -1,10 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { PropertyCard } from '../components/PropertyCard';
-import { ImageUpload } from '../components/ImageUpload';
 import { api } from '../api/client';
 import type { Listing as ListingType } from '../api/client';
 import './OwnerDashboard.css';
+
+// Extend the ListingType to include isFavorite and handle address/type
+interface Listing extends Omit<ListingType, 'address' | 'images'> {
+  address: string | { street?: string; city?: string; state?: string; country?: string; postalCode?: string };
+  images?: string[];
+  isFavorite?: boolean;
+}
+
+type TabType = 'properties' | 'favorites';
+
+interface Listing extends Omit<ListingType, 'address' | 'images'> {
+  address: string | { street?: string; city?: string; state?: string; country?: string; postalCode?: string };
+  images?: string[];
+  isFavorite?: boolean;
+}
 
 interface Booking {
   id: string;
@@ -69,12 +84,30 @@ interface NewProperty {
   status: 'available' | 'rented' | 'maintenance' | 'pending';
 }
 
+type TabType = 'properties' | 'favorites';
+
 const OwnerDashboard: React.FC = () => {
-  const { user } = useAuth();
+  const { token } = useAuth();
+  const navigate = useNavigate();
+  
+  // Redirect to login if no token
+  useEffect(() => {
+    if (!token) {
+      navigate('/login');
+    }
+  }, [token, navigate]);
+
+  if (!token) {
+    return null; // Show nothing while redirecting
+  }
+  // State management
+  const [activeTab, setActiveTab] = useState<TabType>('properties');
   const [listings, setListings] = useState<Listing[]>([]);
+  const [favorites, setFavorites] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showAddProperty, setShowAddProperty] = useState(false);
+  const [favoritesError, setFavoritesError] = useState<string | null>(null);
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
@@ -168,531 +201,172 @@ const OwnerDashboard: React.FC = () => {
       const responseData = await response.json();
       console.log('Listings data received:', responseData);
 
-      // Handle paginated response
-      if (responseData && responseData.success && Array.isArray(responseData.data)) {
-        setListings(responseData.data);
-        setPagination({
-          currentPage: responseData.currentPage || 1,
-          totalPages: responseData.totalPages || 1,
-          totalItems: responseData.total || responseData.data.length,
-          itemsPerPage: responseData.data.length || 10
-        });
       } else {
-        console.warn('Unexpected API response format:', responseData);
-        setListings([]);
-        setPagination(prev => ({
-          ...prev,
-          totalItems: 0,
-          currentPage: 1,
-          totalPages: 1
-        }));
+        await api.favorite(token, listingId);
       }
-      setError(null);
+      
+      // Update both listings and favorites to reflect the favorite status
+      setListings(prevListings => 
+        prevListings.map(listing => 
+          listing.id === listingId 
+            ? { ...listing, isFavorite: !isCurrentlyFavorited } 
+            : listing
+        )
+      );
+
+      // Refresh favorites list
+      await fetchFavorites();
     } catch (err) {
-      console.error('Error in fetchListings:', {
-        message: err instanceof Error ? err.message : 'Unknown error',
-        error: err,
-        timestamp: new Date().toISOString()
+      console.error('Error updating favorite status:', err);
+    }
+  }, [token, fetchFavorites]);
+
+  // Fetch user's listings and favorites on component mount
+  const fetchListings = useCallback(async () => {
+    if (!token) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await api.getUserListings(token, {
+        page: pagination.currentPage,
+        limit: pagination.itemsPerPage
       });
-      setError(`Failed to load your properties. ${err instanceof Error ? err.message : 'Please try again later.'}`);
+      
+      setListings(response.listings);
+      setPagination(prev => ({
+        ...prev,
+        totalPages: response.totalPages,
+        totalItems: response.totalCount
+      }));
+    } catch (err) {
+      setError('Failed to load listings. Please try again.');
+      console.error('Error fetching listings:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, pagination.currentPage, pagination.itemsPerPage]);
 
-  const handleDeleteListing = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this listing?')) {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error('No authentication token found');
-
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/v1/listings/${id}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to delete listing');
-        }
-
-        fetchListings();
-      } catch (error) {
-        console.error('Error deleting listing:', error);
-        alert('Failed to delete listing. Please try again.');
-      }
-    }
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
-
-    setNewProperty(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
-    }));
-  };
-
-  const handleAddProperty = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const fetchFavorites = useCallback(async () => {
+    if (!token) return;
+    
+    setFavoritesLoading(true);
+    setFavoritesError(null);
+    
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('No authentication token found. Please log in again.');
-      }
-
-      // Validate required fields
-      if (!newProperty.title || !newProperty.price || !newProperty.address) {
-        throw new Error('Please fill in all required fields (title, price, address)');
-      }
-
-// Prepare property data for API
-      const propertyData: Partial<ListingType> & { price: number } = {
-        title: newProperty.title,
-        description: newProperty.description,
-        price: parseFloat(String(newProperty.price)) || 0,
-        address: newProperty.address,
-        location: {
-          type: 'Point',
-          coordinates: [newProperty.longitude, newProperty.latitude] as [number, number]
-        },
-        propertyType: newProperty.propertyType || 'apartment',
-        roomType: newProperty.roomType || 'private-room',
-        availableFrom: newProperty.availableFrom || new Date().toISOString().split('T')[0],
-        minStayMonths: Number(newProperty.minStayMonths) || 1,
-        maxOccupants: Number(newProperty.maxOccupants) || 1,
-        bedrooms: Number(newProperty.bedrooms) || 1,
-        bathrooms: Number(newProperty.bathrooms) || 1,
-        size: Number(newProperty.size) || 50,
-        isFurnished: newProperty.isFurnished,
-        hasParking: newProperty.hasParking,
-        hasWifi: newProperty.hasWifi,
-        hasKitchen: newProperty.hasKitchen,
-        hasAirConditioning: newProperty.hasAirConditioning,
-        hasHeating: newProperty.hasHeating,
-        hasWasher: newProperty.hasWasher,
-        hasTv: newProperty.hasTv,
-        hasDesk: newProperty.hasDesk,
-        status: 'pending',
-        images: [],
-      };
-
-      console.log('Creating property with data:', propertyData);
-
-      // Step 1: Create the property
-      let response;
-      try {
-        response = await api.createListing(token, propertyData);
-        console.log('Property creation response:', response);
-      } catch (error) {
-        console.error('Error creating property:', error);
-        throw new Error(`Failed to create property: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-
-      // Use the response directly as it's not wrapped in a data property
-      const createdProperty = response;
-      const propertyId = createdProperty?.id || createdProperty?._id;
-      
-      if (!propertyId) {
-        console.error('Invalid property creation response - missing ID:', response);
-        throw new Error('Failed to create property: No property ID returned from server');
-      }
-
-      // Step 2: Upload images if any
-      if (propertyImages.length > 0) {
-        try {
-          console.log('Uploading images for property:', propertyId);
-          await api.uploadListingImages(token, propertyId, propertyImages);
-          console.log('Images uploaded successfully');
-        } catch (uploadError) {
-          console.error('Error uploading images:', uploadError);
-          // Continue with the flow even if image upload fails
-        }
-      }
-
-      // Reset form and fetch updated listings
-      setNewProperty({
-        title: '',
-        description: '',
-price: '',
-        address: '',
-        location: {
-          type: 'Point',
-          coordinates: [0, 0]
-        },
-        latitude: 0,
-        longitude: 0,
-        propertyType: 'apartment',
-        roomType: 'private-room',
-        availableFrom: new Date().toISOString().split('T')[0],
-        minStayMonths: 1,
-        maxOccupants: 1,
-        bedrooms: 1,
-        bathrooms: 1,
-        size: 50,
-        isFurnished: false,
-        hasParking: false,
-        hasWifi: false,
-        hasKitchen: false,
-        hasAirConditioning: false,
-        hasHeating: false,
-        hasWasher: false,
-        hasTv: false,
-        hasDesk: false,
-        status: 'pending',
-        images: [],
-      });
-
-      setPropertyImages([]);
-      setShowAddProperty(false);
-      fetchListings();
-
-      
-    } catch (error) {
-      console.error('Error in handleAddProperty:', error);
-      alert(`Error: ${error instanceof Error ? error.message : 'Failed to add property. Please try again.'}`);
+      const favs = await api.getFavorites(token);
+      setFavorites(Array.isArray(favs) ? favs : []);
+    } catch (err) {
+      setFavoritesError('Failed to load favorites. Please try again.');
+      console.error('Error fetching favorites:', err);
+    } finally {
+      setFavoritesLoading(false);
     }
-  };
+  }, [token]);
 
   // Handle page change
-  const handlePageChange = (newPage: number) => {
-    fetchListings(newPage, pagination.itemsPerPage);
-  };
+  const handlePageChange = useCallback((newPage: number) => {
+    setPagination(prev => ({
+      ...prev,
+      currentPage: newPage
+    }));
+    fetchListings(newPage);
+  }, [fetchListings]);
 
-  useEffect(() => {
-    if (user) {
-      if (user.role === 'homeowner' || user.role === 'admin') {
-        fetchListings(pagination.currentPage, pagination.itemsPerPage);
-      } else {
-        setError('Access denied. Homeowner or admin privileges required.');
-        setLoading(false);
-      }
-    } else {
-      setError('Please log in to view this page');
-      setLoading(false);
-    }
-  }, [user, pagination.currentPage, pagination.itemsPerPage]);
+  // Tab navigation
+  const renderTab = (tab: TabType, label: string) => (
+    <button
+      onClick={() => setActiveTab(tab)}
+      className={`px-4 py-2 font-medium ${
+        activeTab === tab
+          ? 'border-b-2 border-blue-500 text-blue-600'
+          : 'text-gray-500 hover:text-gray-700'
+      }`}
+    >
+      {label}
+    </button>
+  );
 
-  // Debug: log listings when they change
-  useEffect(() => {
-    console.log('Listings state updated:', listings);
-  }, [listings]);
-
-  if (loading) {
+  // Render loading state
+  if (loading && activeTab === 'properties') {
     return (
-      <div className="container">
-        <h1>Owner Dashboard</h1>
-        <p>Loading your properties...</p>
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
   }
 
-  if (error) {
+  // Render error state
+  if (error && activeTab === 'properties') {
     return (
-      <div className="container">
-        <h1>Owner Dashboard</h1>
-        <p className="error">{error}</p>
+      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+        <strong className="font-bold">Error: </strong>
+        <span className="block sm:inline">{error}</span>
+        <button onClick={fetchListings} className="mt-2 text-sm text-red-700 hover:underline">
+          Try again
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="dashboard-container">
-      <div className="dashboard-header">
-        <h1>My Properties</h1>
-        {!showAddProperty && (
-          <button 
-            className="btn btn-primary"
-            onClick={() => setShowAddProperty(true)}
-          >
-            Add New Property
-          </button>
-        )}
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">
+          {activeTab === 'properties' ? 'My Properties' : 'My Favorites'}
+        </h1>
+        <button
+          onClick={() => navigate('/add-property')}
+          className={`px-4 py-2 rounded-md ${
+            activeTab === 'properties' 
+              ? 'bg-blue-600 text-white hover:bg-blue-700' 
+              : 'bg-gray-300 text-gray-600 cursor-not-allowed'
+          }`}
+          disabled={activeTab !== 'properties'}
+        >
+          Add New Property
+        </button>
       </div>
-
-      {showAddProperty ? (
-        <div className="property-form">
-          <h2>Add New Property</h2>
-          <form onSubmit={handleAddProperty}>
-            <div className="form-group">
-              <label htmlFor="title">Title *</label>
-              <input
-                type="text"
-                id="title"
-                name="title"
-                value={newProperty.title}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="propertyType">Property Type *</label>
-                <select
-                  id="propertyType"
-                  name="propertyType"
-                  value={newProperty.propertyType}
-                  onChange={handleInputChange}
-                  required
-                  className="form-control"
-                >
-                  <option value="apartment">Apartment</option>
-                  <option value="house">House</option>
-                  <option value="condo">Condo</option>
-                  <option value="townhouse">Townhouse</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="roomType">Room Type *</label>
-                <select
-                  id="roomType"
-                  name="roomType"
-                  value={newProperty.roomType}
-                  onChange={handleInputChange}
-                  required
-                  className="form-control"
-                >
-                  <option value="private-room">Private Room</option>
-                  <option value="entire-place">Entire Place</option>
-                  <option value="shared-room">Shared Room</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="bedrooms">Bedrooms *</label>
-                <input
-                  type="number"
-                  id="bedrooms"
-                  name="bedrooms"
-                  min="1"
-                  max="20"
-                  value={newProperty.bedrooms}
-                  onChange={handleInputChange}
-                  required
-                  className="form-control"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="bathrooms">Bathrooms *</label>
-                <input
-                  type="number"
-                  id="bathrooms"
-                  name="bathrooms"
-                  min="1"
-                  max="20"
-                  step="0.5"
-                  value={newProperty.bathrooms}
-                  onChange={handleInputChange}
-                  required
-                  className="form-control"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="size">Size (sq ft) *</label>
-                <input
-                  type="number"
-                  id="size"
-                  name="size"
-                  min="1"
-                  value={newProperty.size}
-                  onChange={handleInputChange}
-                  required
-                  className="form-control"
-                />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="description">Description</label>
-              <textarea
-                id="description"
-                name="description"
-                value={newProperty.description}
-                onChange={handleInputChange}
-                rows={4}
-                className="form-control"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="price">Price per month ($) *</label>
-              <input
-                type="number"
-                id="price"
-                name="price"
-                value={newProperty.price}
-                onChange={handleInputChange}
-                min="0"
-                step="0.01"
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="address">Address *</label>
-              <input
-                type="text"
-                id="address"
-                name="address"
-                value={newProperty.address}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Available From *</label>
-              <input
-                type="date"
-                id="availableFrom"
-                name="availableFrom"
-                value={newProperty.availableFrom}
-                onChange={handleInputChange}
-                required
-                className="form-control"
-                min={new Date().toISOString().split('T')[0]}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Amenities</label>
-              <div className="amenities-grid">
-                {[
-                  { id: 'hasWifi', label: 'WiFi' },
-                  { id: 'hasParking', label: 'Parking' },
-                  { id: 'hasKitchen', label: 'Kitchen' },
-                  { id: 'hasWasher', label: 'Washer' },
-                  { id: 'hasTv', label: 'TV' },
-                  { id: 'hasAirConditioning', label: 'Air Conditioning' },
-                  { id: 'hasHeating', label: 'Heating' },
-                  { id: 'hasDesk', label: 'Desk' },
-                  { id: 'isFurnished', label: 'Furnished' },
-                ].map(amenity => (
-                  <div key={amenity.id} className="form-check">
-                    <input
-                      type="checkbox"
-                      id={amenity.id}
-                      name={amenity.id}
-                      checked={!!newProperty[amenity.id as keyof NewProperty]}
-                      onChange={handleInputChange}
-                      className="form-check-input"
-                    />
-                    <label htmlFor={amenity.id} className="form-check-label">
-                      {amenity.label}
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>Property Images</label>
-              <ImageUpload 
-                onImagesChange={setPropertyImages}
-                maxFiles={10}
-                maxSizeMB={5}
-                initialImages={[]}
-              />
-              <p className="form-hint">Upload high-quality images of your property (max 10 images, 5MB each)</p>
-            </div>
-
-            <div className="form-actions">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setShowAddProperty(false)}
+      <div className="flex mb-6">
+        {renderTab('properties', 'Properties')}
+        {renderTab('favorites', 'Favorites')}
+      </div>
+      {activeTab === 'properties' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {listings.map((listing) => (
+            <PropertyCard
+              key={listing.id}
+              listing={{
+                ...listing,
+                address: formatAddress(listing.address),
+                images: Array.isArray(listing.images) ? listing.images : []
+              }}
+              onToggleFavorite={toggleFavorite}
+              isFavorited={listing.isFavorite}
+              showActions={true}
+            />
+          ))}
+          {pagination.totalPages > 1 && (
+            <div className="pagination">
+              <button 
+                onClick={() => handlePageChange(pagination.currentPage - 1)}
+                disabled={pagination.currentPage <= 1}
+                className="pagination-button"
               >
-                Cancel
+                Previous
               </button>
-              <button type="submit" className="btn btn-primary">
-                Add Property
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : (
-        <div className="dashboard-content">
-          <div className="stats-container">
-            <div className="stat-card">
-              <h3>Total Properties</h3>
-              <p>{listings.length || 0}</p>
-            </div>
-            <div className="stat-card">
-              <h3>Bookings This Month</h3>
-              <p>{
-                Array.isArray(listings) ? listings.reduce((count, listing) => {
-                  const bookings = Array.isArray(listing?.bookings) ? listing.bookings : [];
-                  return count + bookings.filter(b => 
-                    b && b.startDate && new Date(b.startDate).getMonth() === new Date().getMonth()
-                  ).length;
-                }, 0) : 0
-              }</p>
-            </div>
-            <div className="stat-card">
-              <h3>Active Listings</h3>
-              <p>{Array.isArray(listings) ? listings.filter(l => l?.status === 'available').length : 0}</p>
-            </div>
-          </div>
-
-          <h2>My Listings</h2>
-          {!Array.isArray(listings) || listings.length === 0 ? (
-            <div className="empty-state">
-              <p>You don't have any properties listed yet.</p>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => setShowAddProperty(true)}
+              <span className="pagination-info">
+                Page {pagination.currentPage} of {pagination.totalPages}
+              </span>
+              <button 
+                onClick={() => handlePageChange(pagination.currentPage + 1)}
+                disabled={pagination.currentPage >= pagination.totalPages}
+                className="pagination-button"
               >
-                List Your First Property
+                Next
               </button>
             </div>
-          ) : (
-            <>
-              <div className="listings-grid">
-                {listings
-                  .filter((listing): listing is NonNullable<typeof listing> => !!listing)
-                  .map((listing) => (
-                    <div key={listing.id} className="col-md-6 col-lg-4 mb-4">
-                      <PropertyCard 
-                        listing={{
-                          ...listing,
-                          address: listing.address || 'No address provided',
-                          // Ensure images is always an array
-                          images: Array.isArray(listing.images) ? listing.images : []
-                        }}
-                        showActions={true} 
-                        onDelete={handleDeleteListing} 
-                      />
-                    </div>
-                  ))}
-              </div>
-              {pagination.totalPages > 1 && (
-                <div className="pagination">
-                  <button 
-                    onClick={() => handlePageChange(pagination.currentPage - 1)}
-                    disabled={pagination.currentPage <= 1}
-                    className="pagination-button"
-                  >
-                    Previous
-                  </button>
-                  <span className="pagination-info">
-                    Page {pagination.currentPage} of {pagination.totalPages}
-                  </span>
-                  <button 
-                    onClick={() => handlePageChange(pagination.currentPage + 1)}
-                    disabled={pagination.currentPage >= pagination.totalPages}
-                    className="pagination-button"
-                  >
-                    Next
-                  </button>
-                </div>
               )}
             </>
           )}

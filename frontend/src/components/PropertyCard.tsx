@@ -4,24 +4,40 @@ import type { Listing } from '../api/client';
 import { ImageSlideshow } from './ImageSlideshow';
 import styles from '../styles/propertyCard.module.css';
 
+interface Address {
+  street?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
+}
+
 type PropertyCardListing = Omit<Listing, 'images' | 'address'> & {
   images?: string[];
-  address: string | { street?: string; city?: string; state?: string; postalCode?: string; country?: string };
+  address: string | Address;
+  id: string; // Ensure id is always a string
 };
 
 interface PropertyCardProps {
   listing: PropertyCardListing;
   showBookings?: boolean;
   showActions?: boolean;
+  isFavorited?: boolean;
   onDelete?: (id: string) => void;
+  onToggleFavorite?: (listingId: string, isFavorited: boolean) => void;
+  onEdit?: (id: string) => void; // Added onEdit prop
 }
 
 export function PropertyCard({ 
   listing, 
   showBookings = false, 
   showActions = true,
-  onDelete 
+  isFavorited = false,
+  onDelete,
+  onToggleFavorite,
+  onEdit
 }: PropertyCardProps) {
+  const listingId = listing.id || '';
   const formatAddress = (address: string | { street?: string; city?: string; state?: string; postalCode?: string; country?: string } | undefined): string => {
     if (!address) return 'No address provided';
     if (typeof address === 'string') return address;
@@ -41,7 +57,7 @@ export function PropertyCard({
   const formattedAddress = formatAddress(listing.address);
 
   // Convert file paths to HTTP URLs if needed
-  const processImageUrl = (url: string): string => {
+  const processImageUrl = (url: string | undefined): string => {
     if (!url) return '';
     
     // If it's already a full URL, return as is
@@ -91,6 +107,11 @@ export function PropertyCard({
   
   // No need for displayImage since we're using the slideshow component
 
+  // Process images for the slideshow
+  const processedImages = React.useMemo(() => {
+    return (listing.images || []).map(processImageUrl).filter(Boolean) as string[];
+  }, [listing.images]);
+
   return (
     <div className={styles.card}>
       <div className={styles.imageContainer}>
@@ -99,6 +120,32 @@ export function PropertyCard({
           className={styles.slideshow} 
           interval={processedImages.length > 1 ? 5000 : 0}
         />
+        {onToggleFavorite && (
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite(listingId, isFavorited);
+            }}
+            className={`${styles.favoriteButton} ${isFavorited ? styles.favorited : ''}`}
+            aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              className="h-6 w-6" 
+              fill={isFavorited ? 'currentColor' : 'none'} 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+              style={{ width: '1.5rem', height: '1.5rem' }}
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" 
+              />
+            </svg>
+          </button>
+        )}
         {listing.status && (
           <div className={`${styles.statusBadge} ${styles[listing.status] || ''}`}>
             {listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}
