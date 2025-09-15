@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { PropertyCard } from '../components/PropertyCard';
 import { api } from '../api/client';
 import type { Listing as ListingType } from '../api/client';
+import { PropertyCard } from '../components/PropertyCard';
+import type { PropertyCardListing } from '../components/PropertyCard';
 import './OwnerDashboard.css';
 
 // Extend the ListingType to include isFavorite and handle address/type
@@ -11,77 +12,6 @@ interface Listing extends Omit<ListingType, 'address' | 'images'> {
   address: string | { street?: string; city?: string; state?: string; country?: string; postalCode?: string };
   images?: string[];
   isFavorite?: boolean;
-}
-
-type TabType = 'properties' | 'favorites';
-
-interface Listing extends Omit<ListingType, 'address' | 'images'> {
-  address: string | { street?: string; city?: string; state?: string; country?: string; postalCode?: string };
-  images?: string[];
-  isFavorite?: boolean;
-}
-
-interface Booking {
-  id: string;
-  startDate: string;
-  endDate: string;
-  status: 'pending' | 'confirmed' | 'cancelled';
-  user: {
-    name: string;
-    email: string;
-    phone: string;
-  };
-}
-
-export interface Listing {
-  id: string;
-  title: string;
-  description: string;
-  price: number;
-  address: string | { street?: string; city?: string; state?: string; country?: string; postalCode?: string };
-  status: 'available' | 'rented' | 'maintenance' | 'pending';
-  bedrooms?: number;
-  bathrooms?: number;
-  size?: number;
-  hasWifi?: boolean;
-  hasParking?: boolean;
-  hasKitchen?: boolean;
-  hasWasher?: boolean;
-  hasTv?: boolean;
-  hasAirConditioning?: boolean;
-  hasHeating?: boolean;
-  hasDesk?: boolean;
-  bookings: Booking[];
-  images?: string[];
-}
-
-
-interface NewProperty {
-  title: string;
-  description: string;
-  price: string | number;
-  address: string;
-  location: string;
-  latitude: number;
-  longitude: number;
-  propertyType: string;
-  roomType: string;
-  availableFrom: string;
-  minStayMonths: number;
-  maxOccupants: number;
-  bedrooms: number;
-  bathrooms: number;
-  size: number;
-  isFurnished: boolean;
-  hasParking: boolean;
-  hasWifi: boolean;
-  hasKitchen: boolean;
-  hasAirConditioning: boolean;
-  hasHeating: boolean;
-  hasWasher: boolean;
-  hasTv: boolean;
-  hasDesk: boolean;
-  status: 'available' | 'rented' | 'maintenance' | 'pending';
 }
 
 type TabType = 'properties' | 'favorites';
@@ -105,9 +35,7 @@ const OwnerDashboard: React.FC = () => {
   const [listings, setListings] = useState<Listing[]>([]);
   const [favorites, setFavorites] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
-  const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [favoritesError, setFavoritesError] = useState<string | null>(null);
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
@@ -166,79 +94,22 @@ const OwnerDashboard: React.FC = () => {
 
   const [propertyImages, setPropertyImages] = useState<File[]>([]);
 
-  const fetchListings = async (page = 1, limit = 10) => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.error('No authentication token found in localStorage');
-        throw new Error('No authentication token found');
-      }
-
-      const queryParams = new URLSearchParams({
-        page: page.toString(),
-        limit: limit.toString()
-      });
-
-      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/v1/listings/me?${queryParams}`;
-      console.log('Fetching listings from:', apiUrl);
-
-      const response = await fetch(apiUrl, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include', // Include cookies in the request
-      });
-
-      console.log('Response status:', response.status);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('API Error Response:', errorData);
-        throw new Error(errorData.message || `Failed to fetch listings: ${response.statusText}`);
-      }
-
-      const responseData = await response.json();
-      console.log('Listings data received:', responseData);
-
-      } else {
-        await api.favorite(token, listingId);
-      }
-      
-      // Update both listings and favorites to reflect the favorite status
-      setListings(prevListings => 
-        prevListings.map(listing => 
-          listing.id === listingId 
-            ? { ...listing, isFavorite: !isCurrentlyFavorited } 
-            : listing
-        )
-      );
-
-      // Refresh favorites list
-      await fetchFavorites();
-    } catch (err) {
-      console.error('Error updating favorite status:', err);
-    }
-  }, [token, fetchFavorites]);
-
-  // Fetch user's listings and favorites on component mount
-  const fetchListings = useCallback(async () => {
+  const fetchListings = useCallback(async (page = 1, limit = 10) => {
     if (!token) return;
-    
+
     setLoading(true);
     setError(null);
-    
+
     try {
-      const response = await api.getUserListings(token, {
-        page: pagination.currentPage,
-        limit: pagination.itemsPerPage
-      });
-      
-      setListings(response.listings);
+      const listingsData = await api.getMyListings(token);
+      const listingsArray = Array.isArray(listingsData) ? listingsData : [];
+
+      setListings(listingsArray);
       setPagination(prev => ({
         ...prev,
-        totalPages: response.totalPages,
-        totalItems: response.totalCount
+        currentPage: page,
+        totalPages: Math.ceil(listingsArray.length / limit),
+        totalItems: listingsArray.length
       }));
     } catch (err) {
       setError('Failed to load listings. Please try again.');
@@ -246,47 +117,71 @@ const OwnerDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [token, pagination.currentPage, pagination.itemsPerPage]);
+  }, [token]);
 
+  // Fetch favorites from API
   const fetchFavorites = useCallback(async () => {
     if (!token) return;
-    
-    setFavoritesLoading(true);
-    setFavoritesError(null);
-    
+
     try {
       const favs = await api.getFavorites(token);
       setFavorites(Array.isArray(favs) ? favs : []);
     } catch (err) {
-      setFavoritesError('Failed to load favorites. Please try again.');
       console.error('Error fetching favorites:', err);
-    } finally {
-      setFavoritesLoading(false);
     }
   }, [token]);
 
+  // Toggle favorite status
+  const toggleFavorite = useCallback(async (listingId: string, isCurrentlyFavorited: boolean) => {
+    if (!token) return;
+
+    try {
+      if (isCurrentlyFavorited) {
+        await api.unfavorite(token, listingId);
+      } else {
+        await api.favorite(token, listingId);
+      }
+
+      // Update local state
+      setListings(prevListings =>
+        prevListings.map(listing =>
+          listing.id === listingId
+            ? { ...listing, isFavorite: !isCurrentlyFavorited }
+            : listing
+        )
+      );
+
+      // Refresh favorites list
+      await fetchFavorites();
+    } catch (err) {
+      console.error('Error toggling favorite:', err);
+    }
+  }, [token, fetchFavorites]);
+
+  // Ensure listing has required properties for PropertyCard
+  const toPropertyCardListing = (listing: Listing): PropertyCardListing => ({
+    ...listing,
+    id: listing.id || '',
+    title: listing.title || 'No Title',
+    description: listing.description || '',
+    price: listing.price || 0,
+    status: listing.status || 'inactive',
+    address: listing.address || '',
+    images: Array.isArray(listing.images) ? listing.images : []
+  });
+
   // Handle page change
   const handlePageChange = useCallback((newPage: number) => {
-    setPagination(prev => ({
-      ...prev,
-      currentPage: newPage
-    }));
-    fetchListings(newPage);
-  }, [fetchListings]);
+    fetchListings(newPage, pagination.itemsPerPage);
+  }, [fetchListings, pagination.itemsPerPage]);
 
-  // Tab navigation
-  const renderTab = (tab: TabType, label: string) => (
-    <button
-      onClick={() => setActiveTab(tab)}
-      className={`px-4 py-2 font-medium ${
-        activeTab === tab
-          ? 'border-b-2 border-blue-500 text-blue-600'
-          : 'text-gray-500 hover:text-gray-700'
-      }`}
-    >
-      {label}
-    </button>
-  );
+  // Fetch data on component mount
+  useEffect(() => {
+    if (token) {
+      fetchListings(pagination.currentPage, pagination.itemsPerPage);
+      fetchFavorites();
+    }
+  }, [token, fetchListings, fetchFavorites, pagination.currentPage, pagination.itemsPerPage]);
 
   // Render loading state
   if (loading && activeTab === 'properties') {
@@ -303,7 +198,10 @@ const OwnerDashboard: React.FC = () => {
       <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
         <strong className="font-bold">Error: </strong>
         <span className="block sm:inline">{error}</span>
-        <button onClick={fetchListings} className="mt-2 text-sm text-red-700 hover:underline">
+        <button
+          onClick={() => fetchListings(pagination.currentPage, pagination.itemsPerPage)}
+          className="mt-2 text-sm text-red-700 hover:underline"
+        >
           Try again
         </button>
       </div>
@@ -319,8 +217,8 @@ const OwnerDashboard: React.FC = () => {
         <button
           onClick={() => navigate('/add-property')}
           className={`px-4 py-2 rounded-md ${
-            activeTab === 'properties' 
-              ? 'bg-blue-600 text-white hover:bg-blue-700' 
+            activeTab === 'properties'
+              ? 'bg-blue-600 text-white hover:bg-blue-700'
               : 'bg-gray-300 text-gray-600 cursor-not-allowed'
           }`}
           disabled={activeTab !== 'properties'}
@@ -329,51 +227,81 @@ const OwnerDashboard: React.FC = () => {
         </button>
       </div>
       <div className="flex mb-6">
-        {renderTab('properties', 'Properties')}
-        {renderTab('favorites', 'Favorites')}
+        <button
+          onClick={() => setActiveTab('properties')}
+          className={`px-4 py-2 font-medium ${
+            activeTab === 'properties'
+              ? 'border-b-2 border-blue-500 text-blue-600'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Properties
+        </button>
+        <button
+          onClick={() => setActiveTab('favorites')}
+          className={`px-4 py-2 font-medium ${
+            activeTab === 'favorites'
+              ? 'border-b-2 border-blue-500 text-blue-600'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Favorites
+        </button>
       </div>
+
       {activeTab === 'properties' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {listings.map((listing) => (
             <PropertyCard
               key={listing.id}
-              listing={{
-                ...listing,
-                address: formatAddress(listing.address),
-                images: Array.isArray(listing.images) ? listing.images : []
-              }}
+              listing={toPropertyCardListing(listing)}
               onToggleFavorite={toggleFavorite}
-              isFavorited={listing.isFavorite}
+              isFavorited={!!listing.isFavorite}
               showActions={true}
             />
           ))}
-          {pagination.totalPages > 1 && (
-            <div className="pagination">
-              <button 
-                onClick={() => handlePageChange(pagination.currentPage - 1)}
-                disabled={pagination.currentPage <= 1}
-                className="pagination-button"
-              >
-                Previous
-              </button>
-              <span className="pagination-info">
-                Page {pagination.currentPage} of {pagination.totalPages}
-              </span>
-              <button 
-                onClick={() => handlePageChange(pagination.currentPage + 1)}
-                disabled={pagination.currentPage >= pagination.totalPages}
-                className="pagination-button"
-              >
-                Next
-              </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {favorites.map((favorite) => (
+            <PropertyCard
+              key={favorite.id}
+              listing={toPropertyCardListing(favorite)}
+              onToggleFavorite={toggleFavorite}
+              isFavorited={true}
+              showActions={false}
+            />
+          ))}
+          {favorites.length === 0 && (
+            <div className="col-span-3 text-center py-8 text-gray-500">
+              No favorite properties yet. Start by favoriting some properties!
             </div>
-              )}
-            </>
           )}
+        </div>
+      )}
+      
+      {pagination.totalPages > 1 && activeTab === 'properties' && (
+        <div className="flex justify-center mt-8 space-x-4">
+          <button
+            onClick={() => handlePageChange(pagination.currentPage - 1)}
+            disabled={pagination.currentPage <= 1}
+            className="px-4 py-2 border rounded-md disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span className="flex items-center">
+            Page {pagination.currentPage} of {pagination.totalPages}
+          </span>
+          <button
+            onClick={() => handlePageChange(pagination.currentPage + 1)}
+            disabled={pagination.currentPage >= pagination.totalPages}
+            className="px-4 py-2 border rounded-md disabled:opacity-50"
+          >
+            Next
+          </button>
         </div>
       )}
     </div>
   );
 };
-
 export default OwnerDashboard;

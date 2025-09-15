@@ -12,7 +12,7 @@ interface Address {
   country?: string;
 }
 
-type PropertyCardListing = Omit<Listing, 'images' | 'address'> & {
+export type PropertyCardListing = Omit<Listing, 'images' | 'address'> & {
   images?: string[];
   address: string | Address;
   id: string; // Ensure id is always a string
