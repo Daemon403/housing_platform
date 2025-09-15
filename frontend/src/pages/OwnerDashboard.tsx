@@ -290,8 +290,8 @@ const OwnerDashboard: React.FC = () => {
         throw new Error(`Failed to create property: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
 
-      // Handle the nested response structure
-      const createdProperty = response.data || response;
+      // Use the response directly as it's not wrapped in a data property
+      const createdProperty = response;
       const propertyId = createdProperty?.id || createdProperty?._id;
       
       if (!propertyId) {
