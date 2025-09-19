@@ -161,4 +161,4 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 Your Name - [@your_twitter](https://twitter.com/your_twitter) - your.email@example.com
 
-Project Link: [https://github.com/yourusername/student-housing-platform](https://github.com/yourusername/student-housing-platform)
+Project Link: [https://github.com/daemon403/student-housing-platform](https://github.com/daemon403/student-housing-platform)
