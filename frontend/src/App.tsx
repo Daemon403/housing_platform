@@ -173,74 +173,150 @@ function ListingCard({ l }: { l: Listing }) {
 }
 
 function HomePage() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [listings, setListings] = useState<Listing[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [page, setPage] = useState(Number(searchParams.get('page') || '1'))
-  const pageSize = 12
+  const [searchQuery, setSearchQuery] = useState('');
+  const [location, setLocation] = useState('');
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('rent');
 
-  const run = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await api.searchListings({ page, pageSize })
-      setListings(data.data || [])
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
-  }
+  useEffect(() => {
+    const fetchFeaturedListings = async () => {
+      try {
+        setLoading(true);
+        const response = await api.get('/listings/featured');
+        setListings(response.data);
+      } catch (err) {
+        console.error('Error fetching featured listings:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  useEffect(() => { run() }, [page])
-  useEffect(() => { setSearchParams(new URLSearchParams({ page: String(page) })) }, [page])
+    fetchFeaturedListings();
+  }, []);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Handle search logic here
+    console.log('Searching for:', { searchQuery, location });
+  };
+
   return (
-    <main className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Discover Student Housing</h1>
-      
-      {loading && (
-        <div className="flex justify-center items-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
-        </div>
-      )}
-      
-      {error && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-red-700">
-                Error loading listings: {error}
-              </p>
+    <div className="min-h-screen bg-white">
+      {/* Hero Section */}
+      <div className="relative bg-gradient-to-r from-primary-600 to-primary-800 text-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-32">
+          <div className="max-w-3xl">
+            <h1 className="text-4xl md:text-5xl font-bold leading-tight mb-6">
+              Find your perfect student accommodation
+            </h1>
+            <p className="text-xl text-primary-100 mb-8">
+              Browse thousands of student homes, apartments, and rooms for rent near top universities.
+            </p>
+            
+            {/* Search Bar */}
+            <div className="bg-white rounded-lg shadow-xl p-1 max-w-3xl">
+              <div className="flex border-b">
+                {['rent', 'buy', 'roommates'].map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`px-6 py-3 font-medium text-sm ${activeTab === tab 
+                      ? 'text-primary-600 border-b-2 border-primary-600' 
+                      : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </button>
+                ))}
+              </div>
+              
+              <form onSubmit={handleSearch} className="p-4">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1">
+                    <label htmlFor="location" className="sr-only">Location</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg className="h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <input
+                        id="location"
+                        type="text"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                        placeholder="Enter location or university"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <label htmlFor="search" className="sr-only">Search</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg className="h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <input
+                        id="search"
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                        placeholder="What are you looking for?"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    className="px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    Search
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>
-      )}
-      
-      {!loading && !error && (
-        <>
-          {listings.length > 0 ? (
-            <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {listings.map((l) => (
-                <li key={l.id}>
-                  <ListingCard l={l} />
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="text-center py-12">
-              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
-              <h3 className="mt-2 text-lg font-medium text-gray-900">No listings found</h3>
-              <p className="mt-1 text-gray-500">Check back later for new student housing options.</p>
-            </div>
-          )}
+        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-gray-50 to-transparent"></div>
+      </div>
+
+      {/* Featured Properties */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
+            Featured Student Accommodations
+          </h2>
+          <p className="mt-3 max-w-2xl mx-auto text-xl text-gray-500 sm:mt-4">
+            Browse our most popular student homes and apartments
+          </p>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-y-10 gap-x-6 sm:grid-cols-2 lg:grid-cols-3 xl:gap-x-8">
+            {listings.slice(0, 6).map((listing) => (
+              <PropertyCard key={listing.id} listing={listing} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* How It Works */}
+      <div className="bg-gray-50 py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
+              How It Works
+            </h2>
+            <p className="mt-3 max-w-2xl mx-auto text-xl text-gray-500 sm:mt-4">
+              Find your perfect student home in just a few simple steps
+            </p>
+          </div>
           
           {(listings.length > 0 || page > 1) && (
             <div className="mt-8 flex items-center justify-between">
