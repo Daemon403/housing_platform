@@ -90,11 +90,45 @@ exports.getListing = asyncHandler(async (req, res, next) => {
 // @route   POST /api/v1/listings
 // @access  Private
 exports.createListing = asyncHandler(async (req, res) => {
+  // Set default status based on user role (admins can create active listings directly)
+  const status = req.user.role === 'admin' ? 'active' : 'pending';
+  
   const listing = await db.Listing.create({
     ...req.body,
-    ownerId: req.user.id
+    ownerId: req.user.id,
+    status,
+    isActive: true,
+    currentOccupancy: 0
   });
-  res.status(201).json({ success: true, data: listing });
+  
+  res.status(201).json({ 
+    success: true, 
+    message: 'Listing created successfully and is pending approval',
+    data: listing 
+  });
+});
+
+// @desc    Get current user's listings
+// @route   GET /api/v1/listings/my-listings
+// @access  Private
+exports.getMyListings = asyncHandler(async (req, res) => {
+  const listings = await db.Listing.findAll({
+    where: { ownerId: req.user.id },
+    include: [
+      {
+        model: db.Booking,
+        as: 'bookings',
+        include: [{
+          model: db.User,
+          as: 'student',
+          attributes: ['id', 'name', 'email', 'phone']
+        }]
+      }
+    ],
+    order: [['createdAt', 'DESC']]
+  });
+  
+  res.status(200).json({ success: true, count: listings.length, data: listings });
 });
 
 // @desc    Update listing
@@ -133,18 +167,68 @@ exports.updateListing = asyncHandler(async (req, res, next) => {
 // @route   DELETE /api/v1/listings/:id
 // @access  Private
 exports.deleteListing = asyncHandler(async (req, res, next) => {
+  const listing = await db.Listing.findByPk(req.params.id, {
+    include: [{
+      model: db.Booking,
+      where: {
+        status: { [Op.in]: ['pending', 'approved'] }
+      },
+      required: false
+    }]
+  });
+  
+  if (!listing) {
+    return next(new ErrorResponse('Listing not found', 404));
+  }
+  
+  // Make sure user is listing owner or admin
+  if (listing.ownerId !== req.user.id && req.user.role !== 'admin') {
+    return next(new ErrorResponse('Not authorized to delete this listing', 401));
+  }
+  
+  // Check for active bookings
+  if (listing.bookings && listing.bookings.length > 0) {
+    return next(new ErrorResponse('Cannot delete listing with active or pending bookings', 400));
+  }
+  
+  // Soft delete by marking as inactive
+  await listing.update({ isActive: false, status: 'inactive' });
+  
+  res.status(200).json({ 
+    success: true, 
+    message: 'Listing has been deactivated',
+    data: {} 
+  });
+});
+
+// @desc    Get listing's booking requests
+// @route   GET /api/v1/listings/:id/bookings
+// @access  Private
+exports.getListingBookings = asyncHandler(async (req, res, next) => {
   const listing = await db.Listing.findByPk(req.params.id);
   
   if (!listing) {
     return next(new ErrorResponse('Listing not found', 404));
   }
-
+  
+  // Only listing owner or admin can view bookings
   if (listing.ownerId !== req.user.id && req.user.role !== 'admin') {
-    return next(new ErrorResponse('Not authorized', 401));
+    return next(new ErrorResponse('Not authorized to view these bookings', 401));
   }
-
-  await listing.destroy();
-  res.status(200).json({ success: true, data: {} });
+  
+  const bookings = await db.Booking.findAll({
+    where: { listingId: req.params.id },
+    include: [
+      {
+        model: db.User,
+        as: 'student',
+        attributes: ['id', 'name', 'email', 'phone']
+      }
+    ],
+    order: [['createdAt', 'DESC']]
+  });
+  
+  res.status(200).json({ success: true, count: bookings.length, data: bookings });
 });
 
 // @desc    Search listings with filters

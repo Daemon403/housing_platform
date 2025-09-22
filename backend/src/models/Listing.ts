@@ -41,9 +41,21 @@ export interface IListing extends Document {
   amenities: IAmenities;
   images: string[];
   isAvailable: boolean;
+  isActive: boolean; // For soft delete
   availableFrom: Date;
   minimumStay: number; // in months
+  maximumOccupancy: number;
+  currentOccupancy: number;
   rules: string[];
+  features: string[]; // Additional features not covered by amenities
+  utilitiesIncluded: boolean;
+  depositRequired: boolean;
+  depositAmount?: number;
+  leaseTerms: string;
+  status: 'draft' | 'pending' | 'approved' | 'rejected' | 'rented';
+  rejectionReason?: string;
+  approvedBy?: mongoose.Types.ObjectId;
+  approvedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }

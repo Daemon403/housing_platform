@@ -318,40 +318,60 @@ function HomePage() {
             </p>
           </div>
           
-          {(listings.length > 0 || page > 1) && (
-            <div className="mt-8 flex items-center justify-between">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className={`inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
-                  page <= 1
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                Previous
-              </button>
-              
-              <span className="text-sm text-gray-700">
-                Page <span className="font-medium">{page}</span>
-              </span>
-              
-              <button
-                onClick={() => setPage((p) => p + 1)}
-                disabled={listings.length < pageSize}
-                className={`inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
-                  listings.length < pageSize
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                Next
-              </button>
+          <div className="mt-10">
+            <div className="lg:grid lg:grid-cols-3 lg:gap-8">
+              {[
+                {
+                  number: '1',
+                  title: 'Search',
+                  description: 'Use our filters to find properties that match your preferences and budget.'
+                },
+                {
+                  number: '2',
+                  title: 'View',
+                  description: 'Check out photos, read descriptions, and view locations of available properties.'
+                },
+                {
+                  number: '3',
+                  title: 'Book',
+                  description: 'Found your perfect place? Book a viewing or reserve it directly online.'
+                }
+              ].map((step, index) => (
+                <div key={step.title} className="relative mb-10 lg:mb-0">
+                  <div className="absolute flex items-center justify-center h-12 w-12 rounded-md bg-primary-500 text-white text-xl font-bold">
+                    {step.number}
+                  </div>
+                  <div className="ml-16">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900">{step.title}</h3>
+                    <p className="mt-2 text-base text-gray-500">
+                      {step.description}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
-        </>
-      )}
-    </main>
+          </div>
+        </div>
+      </div>
+
+      {/* Call to Action */}
+      <div className="bg-primary-700">
+        <div className="max-w-2xl mx-auto text-center py-16 px-4 sm:py-20 sm:px-6 lg:px-8">
+          <h2 className="text-3xl font-extrabold text-white sm:text-4xl">
+            <span className="block">Ready to find your perfect student home?</span>
+          </h2>
+          <p className="mt-4 text-lg leading-6 text-primary-100">
+            Join thousands of students who found their ideal accommodation with us.
+          </p>
+          <Link
+            to="/search"
+            className="mt-8 w-full inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-primary-600 bg-white hover:bg-primary-50 sm:w-auto"
+          >
+            Browse Properties
+          </Link>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -1081,27 +1101,27 @@ function MyBookingsPage() {
 
 export default function App() {
   return (
-    <div>
+    <div className="min-h-screen flex flex-col">
       <Header />
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/listing/:id" element={<ListingDetailPage />} />
-        <Route path="/search" element={<SearchPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/bookings" element={<MyBookingsPage />} />
-        
-        {/* Owner Routes */}
-        <Route path="/owner" element={<OwnerLayout />}>
-          <Route index element={<OwnerDashboard />} />
-          <Route path="listings/:id/edit" element={<EditListing />} />
-          <Route path="listings" element={<div>Listings Management</div>} />
-          <Route path="bookings" element={<div>Bookings Management</div>} />
-          <Route path="messages" element={<div>Messages</div>} />
-        </Route>
-        
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+      <main className="flex-grow">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/listings/:id" element={<ListingDetailPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/bookings" element={<MyBookingsPage />} />
+          
+          {/* Owner Routes */}
+          <Route path="/owner" element={<OwnerLayout />}>
+            <Route index element={<OwnerDashboard />} />
+            <Route path="listings/new" element={<EditListing mode="create" />} />
+            <Route path="listings/:id/edit" element={<EditListing mode="edit" />} />
+          </Route>
+          
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </main>
       <Footer />
     </div>
   )

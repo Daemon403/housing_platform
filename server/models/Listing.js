@@ -1,4 +1,4 @@
-const { DataTypes } = require('sequelize');
+const { DataTypes, Op } = require('sequelize');
 const slugify = require('slugify');
 
 module.exports = (sequelize) => {
@@ -139,9 +139,134 @@ module.exports = (sequelize) => {
       type: DataTypes.ARRAY(DataTypes.STRING),
       defaultValue: []
     },
+    // Listing status lifecycle: pending -> (approved|rejected) -> active -> (inactive|sold)
     status: {
-      type: DataTypes.ENUM('active', 'pending', 'rejected', 'sold', 'inactive'),
-      defaultValue: 'pending'
+      type: DataTypes.ENUM('pending', 'approved', 'rejected', 'active', 'inactive', 'sold', 'under_maintenance'),
+      defaultValue: 'pending',
+      validate: {
+        isValidTransition(value) {
+          const validTransitions = {
+            pending: ['approved', 'rejected'],
+            approved: ['active', 'rejected'],
+            rejected: ['pending'],
+            active: ['inactive', 'sold', 'under_maintenance'],
+            inactive: ['active', 'sold'],
+            under_maintenance: ['active', 'inactive'],
+            sold: [] // Terminal state
+          };
+          
+          if (this.previous('status') && !validTransitions[this.previous('status')].includes(value)) {
+            throw new Error(`Invalid status transition from ${this.previous('status')} to ${value}`);
+          }
+        }
+      }
+    },
+    // Soft delete flag
+    isActive: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+      allowNull: false
+    },
+    // Room capacity tracking
+    maximumOccupancy: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      validate: {
+        min: 1,
+        max: 20,
+        isLessThanMaxOccupants(value) {
+          if (this.maxOccupants && value > this.maxOccupants) {
+            throw new Error('Maximum occupancy cannot be greater than max occupants');
+          }
+        }
+      }
+    },
+    currentOccupancy: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+      validate: {
+        min: 0,
+        isLessThanMax(value) {
+          if (this.maximumOccupancy && value > this.maximumOccupancy) {
+            throw new Error('Current occupancy cannot exceed maximum occupancy');
+          }
+        }
+      }
+    },
+    // Extended features as JSON for flexibility
+    features: {
+      type: DataTypes.JSONB,
+      defaultValue: {},
+      validate: {
+        isValidFeatures(value) {
+          if (typeof value !== 'object' || value === null) {
+            throw new Error('Features must be an object');
+          }
+        }
+      }
+    },
+    // Utilities and financials
+    utilitiesIncluded: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    },
+    depositRequired: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    },
+    depositAmount: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+      validate: {
+        min: 0,
+        isDepositValid(value) {
+          if (this.depositRequired && (!value || value <= 0)) {
+            throw new Error('Deposit amount is required when deposit is required');
+          }
+        }
+      }
+    },
+    // Lease terms in months
+    leaseTerms: {
+      type: DataTypes.ARRAY(DataTypes.INTEGER),
+      defaultValue: [6, 12],
+      validate: {
+        isValidLeaseTerms(value) {
+          if (!Array.isArray(value) || value.length === 0) {
+            throw new Error('Lease terms must be a non-empty array');
+          }
+          if (!value.every(term => Number.isInteger(term) && term > 0)) {
+            throw new Error('All lease terms must be positive integers');
+          }
+          if (value.some(term => term % 6 !== 0)) {
+            throw new Error('Lease terms must be in multiples of 6 months');
+          }
+        }
+      }
+    },
+    // Approval tracking
+    rejectionReason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      validate: {
+        isRejectionReasonRequired(value) {
+          if (this.status === 'rejected' && (!value || value.trim() === '')) {
+            throw new Error('Rejection reason is required when status is rejected');
+          }
+        }
+      }
+    },
+    approvedBy: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: 'users', // This should match the actual table name for users
+        key: 'id'
+      }
+    },
+    approvedAt: {
+      type: DataTypes.DATE,
+      allowNull: true
     },
     featured: {
       type: DataTypes.BOOLEAN,
@@ -161,6 +286,29 @@ module.exports = (sequelize) => {
     }
   }, {
     timestamps: true,
+    paranoid: true, // Enables soft deletes
+    defaultScope: {
+      where: {
+        isActive: true
+      }
+    },
+    scopes: {
+      active: {
+        where: { isActive: true, status: 'active' }
+      },
+      pending: {
+        where: { status: 'pending' }
+      },
+      available: {
+        where: {
+          status: 'active',
+          isActive: true,
+          [Op.and]: [
+            sequelize.literal('"currentOccupancy" < "maximumOccupancy"')
+          ]
+        }
+      }
+    },
     underscored: true,
     tableName: 'listings',
     indexes: [
@@ -191,6 +339,42 @@ module.exports = (sequelize) => {
       }) + '-' + Math.random().toString(36).substring(2, 7);
     }
   });
+
+  // Handle status transitions and related validations
+  Listing.beforeUpdate(async (listing) => {
+    // Set approvedAt when status changes to approved
+    if (listing.changed('status') && listing.status === 'approved') {
+      listing.approvedAt = new Date();
+    }
+    
+    // When a listing is deactivated, ensure it's not marked as active
+    if (listing.changed('isActive') && !listing.isActive) {
+      listing.status = 'inactive';
+    }
+  });
+
+  // Instance methods
+  Listing.prototype.isAvailable = function() {
+    return this.status === 'active' && 
+           this.isActive && 
+           this.currentOccupancy < this.maximumOccupancy;
+  };
+
+  Listing.prototype.incrementOccupancy = async function(amount = 1) {
+    if (this.currentOccupancy + amount > this.maximumOccupancy) {
+      throw new Error('Exceeds maximum occupancy');
+    }
+    this.currentOccupancy += amount;
+    return this.save();
+  };
+
+  Listing.prototype.decrementOccupancy = async function(amount = 1) {
+    if (this.currentOccupancy - amount < 0) {
+      throw new Error('Cannot have negative occupancy');
+    }
+    this.currentOccupancy -= amount;
+    return this.save();
+  };
 
   // Define associations
   Listing.associate = (models) => {

@@ -85,14 +85,14 @@ export function PropertyCard({
   // Path to the placeholder image in the public directory
   const fallbackImage = '/images/placeholder.png';
   
-  // Process all available images, filtering out any invalid ones
+  // Process all available images for the slideshow, with error handling and fallback
   const processedImages = React.useMemo(() => {
     if (!listing.images || !Array.isArray(listing.images) || listing.images.length === 0) {
       return [fallbackImage];
     }
     
     // Process and filter images
-    return listing.images
+    const images = listing.images
       .map(img => {
         try {
           const processed = processImageUrl(img);
@@ -103,13 +103,9 @@ export function PropertyCard({
         }
       })
       .filter((img): img is string => Boolean(img));
-  }, [listing.images]);
-  
-  // No need for displayImage since we're using the slideshow component
-
-  // Process images for the slideshow
-  const processedImages = React.useMemo(() => {
-    return (listing.images || []).map(processImageUrl).filter(Boolean) as string[];
+    
+    // If no valid images were found, use the fallback
+    return images.length > 0 ? images : [fallbackImage];
   }, [listing.images]);
 
   return (

@@ -27,6 +27,7 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const listingRoutes = require('./routes/listings');
 const bookingRoutes = require('./routes/bookings');
+const rentalRoutes = require('./routes/rentalRoutes');
 
 // Initialize Express app
 const app = express();
@@ -80,6 +81,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/listings', listingRoutes);
 app.use('/api/v1/bookings', bookingRoutes);
+app.use('/api/v1/rentals', rentalRoutes);
 
 // Error handler middleware (should be after all other middleware and routes)
 app.use(errorHandler);

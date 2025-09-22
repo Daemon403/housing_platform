@@ -60,17 +60,23 @@ export type Listing = {
 
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000'
 
-async function http<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
+const http = async <T>(path: string, init?: RequestInit): Promise<T> => {
+  const response = await fetch(`${API_URL}${path}`, {
     ...init,
-  })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(text || `HTTP ${res.status}`)
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init?.headers || {})
+    },
+    credentials: 'include'
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || 'Something went wrong');
   }
-  return res.json() as Promise<T>
-}
+
+  return response.json();
+};
 
 export const api = {
   baseUrl: API_URL,
@@ -207,10 +213,18 @@ export const api = {
     })
   },
   // Owner endpoints
-  async getMyListings(token: string) {
-    return http<{ success: true; data: Listing[] }>(`/api/v1/users/me/listings`, {
+  getMyListings: async (token: string) => {
+    return http<{ success: boolean; data: any[]; total?: number }>('/api/v1/rentals/my-listings', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+  },
+  getOwnerBookings: async (token: string, listingId: string) => {
+    return http(`/api/v1/rentals/listings/${listingId}/bookings`, {
       headers: { Authorization: `Bearer ${token}` }
-    })
+    });
   },
   async createListing(token: string, payload: Partial<Listing> & { price: number }) {
     return http<Listing>('/api/v1/listings', {
