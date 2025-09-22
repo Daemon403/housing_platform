@@ -16,6 +16,7 @@ export type PropertyCardListing = Omit<Listing, 'images' | 'address'> & {
   images?: string[];
   address: string | Address;
   id: string; // Ensure id is always a string
+  isFavorite?: boolean; // Add isFavorite property
 };
 
 interface PropertyCardProps {
@@ -24,8 +25,8 @@ interface PropertyCardProps {
   showActions?: boolean;
   isFavorited?: boolean;
   onDelete?: (id: string) => void;
-  onToggleFavorite?: (listingId: string, isFavorited: boolean) => void;
-  onEdit?: (id: string) => void; // Added onEdit prop
+  onFavoriteToggle?: () => void;
+  onEdit?: (id: string) => void;
 }
 
 export function PropertyCard({ 
@@ -34,10 +35,9 @@ export function PropertyCard({
   showActions = true,
   isFavorited = false,
   onDelete,
-  onToggleFavorite,
+  onFavoriteToggle,
   onEdit
 }: PropertyCardProps) {
-  const listingId = listing.id || '';
   const formatAddress = (address: string | { street?: string; city?: string; state?: string; postalCode?: string; country?: string } | undefined): string => {
     if (!address) return 'No address provided';
     if (typeof address === 'string') return address;
@@ -116,11 +116,11 @@ export function PropertyCard({
           className={styles.slideshow} 
           interval={processedImages.length > 1 ? 5000 : 0}
         />
-        {onToggleFavorite && (
+        {onFavoriteToggle && (
           <button 
             onClick={(e) => {
               e.stopPropagation();
-              onToggleFavorite(listingId, isFavorited);
+              onFavoriteToggle();
             }}
             className={`${styles.favoriteButton} ${isFavorited ? styles.favorited : ''}`}
             aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}

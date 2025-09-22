@@ -61,40 +61,21 @@ export type Listing = {
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000'
 
 const http = async <T>(path: string, init?: RequestInit): Promise<T> => {
-  const baseUrl = API_URL;
-  const url = path.startsWith('http') ? path : `${baseUrl}${path}`;
-  
-  const config: RequestInit = {
+  const response = await fetch(`${API_URL}${path}`, {
     ...init,
-    credentials: 'include', // This will include cookies with cross-origin requests
     headers: {
       'Content-Type': 'application/json',
       ...(init?.headers || {})
-    }
-  };
+    },
+    credentials: 'include'
+  });
 
-  try {
-    const response = await fetch(url, config);
-    
-    // Handle empty responses (like 204 No Content)
-    if (response.status === 204) {
-      return null as unknown as T;
-    }
-    
-    const data = await response.json().catch(() => ({}));
-    
-    if (!response.ok) {
-      const error = new Error(data.message || 'Something went wrong');
-      (error as any).status = response.status;
-      (error as any).data = data;
-      throw error;
-    }
-    
-    return data as T;
-  } catch (error) {
-    console.error(`API call failed: ${path}`, error);
-    throw error;
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || 'Something went wrong');
   }
+
+  return response.json();
 };
 
 export const api = {
@@ -295,13 +276,9 @@ export const api = {
       headers: { Authorization: `Bearer ${token}` }
     })
   },
-  // Get bookings for a specific listing
   async getOwnerBookings(token: string, listingId: string) {
     return http<{ success: true; data: any[] }>(`/api/v1/bookings/listing/${listingId}`, {
-      headers: { 
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
+      headers: { Authorization: `Bearer ${token}` }
     })
   },
   async approveBooking(token: string, bookingId: string) {

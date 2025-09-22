@@ -40,17 +40,32 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // Enable CORS (support multiple origins via comma-separated FRONTEND_URL)
-const allowedOrigins = (process.env.FRONTEND_URL || '')
-  .split(',')
-  .map(o => o.trim())
-  .filter(Boolean);
+const allowedOrigins = [
+  'http://localhost:3000', // Default Vite dev server
+  'http://localhost:5000', // Default backend port
+  'http://localhost:5173', // Common Vite dev port
+  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => o.trim()) : [])
+].filter(Boolean);
+
 console.log('[BOOT] CORS allowed origins:', allowedOrigins);
+
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // allow non-browser or same-origin
-    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (like mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Check if the origin is in the allowed origins
+    if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
+    
+    // For development, you might want to be more permissive
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`[CORS] Allowing origin in development: ${origin}`);
+      return callback(null, true);
+    }
+    
+    // In production, only allow specific origins
     return callback(new Error('Not allowed by CORS'));
   },
   credentials: true

@@ -10,6 +10,7 @@ import { useAuth } from './context/AuthContext'
 import OwnerDashboard from './pages/OwnerDashboard';
 import OwnerLayout from './pages/owner/OwnerLayout';
 import EditListing from './pages/EditListing';
+import TestCors from './pages/TestCors';
 
 function Header() {
   const { user, logout } = useAuth();
@@ -169,7 +170,13 @@ function Footer() {
 }
 
 function ListingCard({ l }: { l: Listing }) {
-  return <PropertyCard listing={l} showActions={false} />;
+  // Ensure the listing has an id before passing it to PropertyCard
+  const listingWithId = {
+    ...l,
+    id: l.id || l._id || '' // Use _id as fallback if id is not available
+  };
+  
+  return <PropertyCard listing={listingWithId} showActions={false} />;
 }
 
 function HomePage() {
@@ -183,8 +190,9 @@ function HomePage() {
     const fetchFeaturedListings = async () => {
       try {
         setLoading(true);
-        const response = await api.get('/listings/featured');
-        setListings(response.data);
+        // Use the getListings method from the api client
+        const featuredListings = await api.getListings({ page: 1, pageSize: 4 });
+        setListings(featuredListings);
       } catch (err) {
         console.error('Error fetching featured listings:', err);
       } finally {
@@ -299,9 +307,14 @@ function HomePage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-y-10 gap-x-6 sm:grid-cols-2 lg:grid-cols-3 xl:gap-x-8">
-            {listings.slice(0, 6).map((listing) => (
-              <PropertyCard key={listing.id} listing={listing} />
-            ))}
+            {listings.slice(0, 6).map((listing) => {
+              // Ensure the listing has an id before passing it to PropertyCard
+              const listingWithId = {
+                ...listing,
+                id: listing.id || listing._id || ''
+              };
+              return <PropertyCard key={listingWithId.id} listing={listingWithId} />;
+            })}
           </div>
         )}
       </div>
@@ -336,7 +349,7 @@ function HomePage() {
                   title: 'Book',
                   description: 'Found your perfect place? Book a viewing or reserve it directly online.'
                 }
-              ].map((step, index) => (
+              ].map((step) => (
                 <div key={step.title} className="relative mb-10 lg:mb-0">
                   <div className="absolute flex items-center justify-center h-12 w-12 rounded-md bg-primary-500 text-white text-xl font-bold">
                     {step.number}
@@ -1120,6 +1133,7 @@ export default function App() {
           </Route>
           
           <Route path="*" element={<NotFoundPage />} />
+          <Route path="/test-cors" element={<TestCors />} />
         </Routes>
       </main>
       <Footer />

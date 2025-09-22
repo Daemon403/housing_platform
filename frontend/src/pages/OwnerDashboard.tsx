@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
@@ -11,33 +11,22 @@ import './OwnerDashboard.css';
 // Types
 type TabType = 'properties' | 'favorites';
 
-interface PropertyFormData extends Omit<ListingType, 'id' | 'createdAt' | 'updatedAt' | 'owner' | 'bookings' | 'slug' | 'price' | 'address' | 'location'> {
+// Define the shape of a property card listing
+interface PropertyCardListing {
+  id: string;
+  title: string;
+  description: string;
   price: number;
   address: string;
-  latitude: number;
-  longitude: number;
-  location: {
-    type: 'Point';
-    coordinates: [number, number];
-  };
-  minStayMonths: number;
-  maxOccupants: number;
+  images: string[];
   bedrooms: number;
   bathrooms: number;
   size: number;
-  isFurnished: boolean;
-  hasParking: boolean;
-  hasWifi: boolean;
-  hasKitchen: boolean;
-  hasAirConditioning: boolean;
-  hasHeating: boolean;
-  hasWasher: boolean;
-  hasTv: boolean;
-  hasDesk: boolean;
-  status: 'available' | 'rented' | 'maintenance' | 'pending' | 'rejected' | 'sold' | 'inactive';
-  images: string[];
+  status: string;
+  isFavorite?: boolean;
 }
 
+// Extend the base ListingType with our custom fields
 interface Listing extends Omit<ListingType, 'address' | 'images' | 'status'> {
   address: string | { street?: string; city?: string; state?: string; country?: string; postalCode?: string };
   images: string[];
@@ -50,7 +39,7 @@ interface Listing extends Omit<ListingType, 'address' | 'images' | 'status'> {
 }
 
 const OwnerDashboard: React.FC = () => {
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const navigate = useNavigate();
   
   // State management
@@ -61,144 +50,179 @@ const OwnerDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState({
     currentPage: 1,
-    itemsPerPage: 10,
+    totalPages: 1,
     totalItems: 0,
-    totalPages: 1
+    itemsPerPage: 10
   });
-  
-  // Redirect to login if no token
-  useEffect(() => {
-    if (!token) {
-      navigate('/login');
-    } else {
-      // Load data when token is available
-      fetchListings(pagination.currentPage, pagination.itemsPerPage);
-      fetchFavorites();
-    }
-  }, [token, navigate]);
 
   // Navigation function for adding new property
   const handleAddProperty = useCallback(() => {
     navigate('/owner/listings/new');
   }, [navigate]);
-  
+
   // Handle tab change
   const handleTabChange = useCallback((tab: TabType) => {
     setActiveTab(tab);
   }, []);
-  
-  // Fetch favorites from API
+
+  // Fetch favorites
   const fetchFavorites = useCallback(async () => {
     if (!token) return;
 
     try {
-      const favs = await api.getFavorites(token);
-      setFavorites(Array.isArray(favs) ? favs : []);
+      const response = await api.getFavorites(token);
+
+      // Transform the favorites to include the isFavorite flag
+      const favoritesWithFlag = response.data.map((favorite: ListingType) => ({
+        ...favorite,
+        isFavorite: true,
+        // Ensure required fields have default values
+        id: favorite.id || '',
+        address: favorite.address || '',
+        images: favorite.images || [],
+        status: (favorite.status as 'available' | 'rented' | 'maintenance' | 'pending' | 'rejected' | 'sold' | 'inactive') || 'inactive'
+      } as Listing));
+
+      setFavorites(favoritesWithFlag);
     } catch (err) {
       console.error('Error fetching favorites:', err);
+      toast.error('Failed to load favorites');
     }
   }, [token]);
-  
+
   // Fetch owner's listings with pagination
-  const fetchListings = useCallback(async (page: number = 1, limit: number = 10) => {
-    if (!token) return;
-    
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const response = await api.getMyListings(token);
-      if (response.success) {
-        const formattedListings = response.data.map((listing: any) => ({
-          ...listing,
-          address: typeof listing.address === 'string' 
-            ? listing.address 
-            : `${listing.address?.street || ''}, ${listing.address?.city || ''}`.trim(),
-          images: Array.isArray(listing.images) ? listing.images : [],
-          maximum_occupancy: listing.maximum_occupancy || listing.maxOccupants || 1,
-          current_occupancy: listing.current_occupancy || 0,
-          isFavorite: favorites.some(fav => fav.id === listing.id)
-        }));
+  const fetchListings = useCallback(
+    async (page: number = 1, limit: number = 10) => {
+      if (!token) return;
+
+      setLoading(true);
+      try {
+        // Call the API with just the token
+        const response = await api.getMyListings(token);
+
+        // The response should have a data property with the listings array
+        const listingsData = response.data || [];
         
-        setListings(formattedListings);
-        setPagination(prev => ({
-          ...prev,
+        // Apply client-side pagination since the API doesn't support it natively
+        const paginatedListings = listingsData.slice(
+          (page - 1) * limit,
+          page * limit
+        );
+        
+        // Transform the listings to include the isFavorite flag and ensure required fields
+        const listingsWithFavorites = paginatedListings.map((listing: ListingType) => ({
+          ...listing,
+          isFavorite: favorites.some((fav) => fav.id === listing.id),
+          // Ensure required fields have default values
+          id: listing.id || '',
+          address: listing.address || '',
+          images: listing.images || [],
+          status: (listing.status as 'available' | 'rented' | 'maintenance' | 'pending' | 'rejected' | 'sold' | 'inactive') || 'inactive'
+        } as Listing));
+
+        setListings(listingsWithFavorites);
+        
+        // Set pagination based on the response or use defaults
+        setPagination({
           currentPage: page,
-          totalItems: response.total || formattedListings.length,
-          totalPages: Math.ceil((response.total || formattedListings.length) / limit)
-        }));
+          totalPages: Math.ceil(listingsData.length / limit),
+          totalItems: listingsData.length,
+          itemsPerPage: limit,
+        });
+        
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching listings:', err);
+        setError('Failed to load properties. Please try again later.');
+        toast.error('Failed to load properties');
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Error fetching listings:', err);
-      setError('Failed to load your properties. Please try again.');
-      toast.error('Failed to load properties');
-    } finally {
-      setLoading(false);
+    },
+    [token, favorites]
+  );
+
+  // Initial data fetch
+  useEffect(() => {
+    if (!token) {
+      navigate('/login');
+      return;
     }
-  }, [token, favorites]);
-  
-  // Convert listing to PropertyCard format
-  const toPropertyCardListing = (listing: Listing) => ({
-    id: listing.id,
-    title: listing.title || 'No Title',
-    description: listing.description || '',
-    price: listing.price || 0,
-    address: typeof listing.address === 'string' ? listing.address : 
-             `${listing.address?.street || ''}, ${listing.address?.city || ''}`.trim(),
-    images: Array.isArray(listing.images) ? listing.images : [],
-    bedrooms: listing.bedrooms || 0,
-    bathrooms: listing.bathrooms || 0,
-    size: listing.size || 0,
-    status: listing.status || 'inactive',
-  });
+
+    fetchListings(pagination.currentPage, pagination.itemsPerPage);
+    fetchFavorites();
+  }, [token, navigate, fetchListings, fetchFavorites, pagination.currentPage, pagination.itemsPerPage]);
 
   // Convert listing to PropertyCard format
-  const toPropertyCardListing = (listing: Listing) => ({
-    id: listing.id,
-    title: listing.title || 'No Title',
-    description: listing.description || '',
-    price: listing.price || 0,
-    address: typeof listing.address === 'string' ? listing.address : 
-             `${listing.address?.street || ''}, ${listing.address?.city || ''}`.trim(),
-    images: Array.isArray(listing.images) ? listing.images : [],
-    bedrooms: listing.bedrooms || 0,
-    bathrooms: listing.bathrooms || 0,
-    size: listing.size || 0,
-    status: listing.status || 'inactive',
-  });
-
-  // Toggle favorite status
-  const toggleFavorite = useCallback(async (listingId: string, isCurrentlyFavorited: boolean) => {
-    if (!token) return;
-
-    try {
-      if (isCurrentlyFavorited) {
-        await api.unfavorite(token, listingId);
-      } else {
-        await api.favorite(token, listingId);
-      }
-
-      // Update local state
-      setListings(prevListings =>
-        prevListings.map(listing =>
-          listing.id === listingId
-            ? { ...listing, isFavorite: !isCurrentlyFavorited }
-            : listing
-        )
-      );
-
-      // Refresh favorites list
-      await fetchFavorites();
-    } catch (err) {
-      console.error('Error toggling favorite:', err);
-      toast.error('Failed to update favorites');
-    }
-  }, [token, fetchFavorites]);
+  const toPropertyCardListing = useCallback(
+    (listing: Listing): PropertyCardListing => ({
+      id: listing.id,
+      title: listing.title || 'No Title',
+      description: listing.description || '',
+      price: listing.price || 0,
+      address: typeof listing.address === 'string'
+        ? listing.address
+        : `${listing.address?.street || ''}, ${listing.address?.city || ''}`.trim(),
+      images: Array.isArray(listing.images) ? listing.images : [],
+      bedrooms: listing.bedrooms || 0,
+      bathrooms: listing.bathrooms || 0,
+      size: listing.size || 0,
+      status: listing.status || 'inactive',
+      isFavorite: listing.isFavorite,
+    }),
+    []
+  );
 
   // Handle page change
-  const handlePageChange = useCallback((newPage: number) => {
-    fetchListings(newPage, pagination.itemsPerPage);
-  }, [fetchListings, pagination.itemsPerPage]);
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      if (newPage < 1 || newPage > pagination.totalPages) return;
+      setPagination((prev) => ({ ...prev, currentPage: newPage }));
+      fetchListings(newPage, pagination.itemsPerPage);
+    },
+    [pagination.totalPages, pagination.itemsPerPage, fetchListings]
+  );
+
+  // Toggle favorite status
+  const toggleFavorite = useCallback(
+    async (listingId: string, isCurrentlyFavorited: boolean) => {
+      if (!token) return;
+
+      try {
+        if (isCurrentlyFavorited) {
+          await api.unfavorite(token, listingId);
+        } else {
+          await api.favorite(token, listingId);
+        }
+
+        // Update local state
+        setListings((prevListings) =>
+          prevListings.map((listing) =>
+            listing.id === listingId
+              ? { ...listing, isFavorite: !isCurrentlyFavorited }
+              : listing
+          )
+        );
+
+        // Update favorites list
+        setFavorites((prevFavorites) =>
+          isCurrentlyFavorited
+            ? prevFavorites.filter((fav) => fav.id !== listingId)
+            : [
+                ...prevFavorites,
+                {
+                  ...listings.find((l) => l.id === listingId)!,
+                  isFavorite: true,
+                },
+              ]
+        );
+      } catch (err) {
+        console.error('Error toggling favorite:', err);
+        toast.error('Failed to update favorites');
+      }
+    },
+    [token, listings]
+  );
 
   // Render loading state
   if (loading) {
@@ -215,7 +239,7 @@ const OwnerDashboard: React.FC = () => {
       <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
         <strong className="font-bold">Error: </strong>
         <span className="block sm:inline">{error}</span>
-        <button 
+        <button
           onClick={() => fetchListings(pagination.currentPage, pagination.itemsPerPage)}
           className="ml-2 px-2 py-1 text-xs font-semibold text-red-700 hover:text-red-500"
         >
@@ -247,8 +271,8 @@ const OwnerDashboard: React.FC = () => {
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => handleTabChange('properties')}
-            className={`${activeTab === 'properties' 
-              ? 'border-primary-500 text-primary-600' 
+            className={`${activeTab === 'properties'
+              ? 'border-primary-500 text-primary-600'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} 
               whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
           >
@@ -256,8 +280,8 @@ const OwnerDashboard: React.FC = () => {
           </button>
           <button
             onClick={() => handleTabChange('favorites')}
-            className={`${activeTab === 'favorites' 
-              ? 'border-primary-500 text-primary-600' 
+            className={`${activeTab === 'favorites'
+              ? 'border-primary-500 text-primary-600'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} 
               whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
           >
@@ -304,7 +328,7 @@ const OwnerDashboard: React.FC = () => {
                       status: listing.status,
                     }}
                     onFavoriteToggle={() => toggleFavorite(listing.id, listing.isFavorite || false)}
-                    isFavorite={listing.isFavorite || false}
+                    isFavorited={listing.isFavorite || false}
                   />
                   <div className="p-4 border-t border-gray-100">
                     <div className="flex justify-between items-center">
@@ -318,7 +342,7 @@ const OwnerDashboard: React.FC = () => {
                         >
                           Edit
                         </button>
-                        <button 
+                        <button
                           onClick={() => {}}
                           className="text-sm text-red-600 hover:text-red-800"
                         >
@@ -331,54 +355,7 @@ const OwnerDashboard: React.FC = () => {
               ))}
             </div>
           )}
-          
-          {/* Pagination */}
-          {pagination.totalPages > 1 && (
-            <div className="mt-8 flex justify-center">
-              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                <button
-                  onClick={() => handlePageChange(Math.max(1, pagination.currentPage - 1))}
-                  disabled={pagination.currentPage === 1}
-                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <span className="sr-only">Previous</span>
-                  <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                </button>
-                {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                  const pageNum = Math.max(1, Math.min(
-                    pagination.totalPages - 4,
-                    pagination.currentPage - 2
-                  )) + i;
-                  
-                  if (pageNum > pagination.totalPages) return null;
-                  
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => handlePageChange(pageNum)}
-                      className={`${pagination.currentPage === pageNum 
-                        ? 'bg-primary-50 border-primary-500 text-primary-600' 
-                        : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'} 
-                        relative inline-flex items-center px-4 py-2 border text-sm font-medium`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-                <button
-                  onClick={() => handlePageChange(Math.min(pagination.totalPages, pagination.currentPage + 1))}
-                  disabled={pagination.currentPage === pagination.totalPages}
-                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <span className="sr-only">Next</span>
-                  <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                  </svg>
-                </button>
-              </nav>
-        </div>
+        </>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {favorites.length === 0 ? (
@@ -388,7 +365,6 @@ const OwnerDashboard: React.FC = () => {
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
-                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
@@ -406,7 +382,6 @@ const OwnerDashboard: React.FC = () => {
                 <PropertyCard
                   listing={toPropertyCardListing(favorite)}
                   onFavoriteToggle={() => toggleFavorite(favorite.id, true)}
-                  isFavorite={true}
                 />
                 <div className="p-4 border-t border-gray-100">
                   <div className="flex justify-between items-center">
@@ -428,24 +403,54 @@ const OwnerDashboard: React.FC = () => {
       )}
 
       {pagination.totalPages > 1 && activeTab === 'properties' && (
-        <div className="flex justify-center mt-8 space-x-4">
-          <button
-            onClick={() => handlePageChange(pagination.currentPage - 1)}
-            disabled={pagination.currentPage <= 1}
-            className="px-4 py-2 border rounded-md disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <span className="flex items-center">
-            Page {pagination.currentPage} of {pagination.totalPages}
-          </span>
-          <button
-            onClick={() => handlePageChange(pagination.currentPage + 1)}
-            disabled={pagination.currentPage >= pagination.totalPages}
-            className="px-4 py-2 border rounded-md disabled:opacity-50"
-          >
-            Next
-          </button>
+        <div className="mt-8 flex justify-center">
+          <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+            <button
+              onClick={() => handlePageChange(pagination.currentPage - 1)}
+              disabled={pagination.currentPage === 1}
+              className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="sr-only">Previous</span>
+              <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
+            </button>
+
+            {/* Page numbers */}
+            {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+              // Calculate page number based on current page and total pages
+              let pageNum: number;
+              if (pagination.totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (pagination.currentPage <= 3) {
+                pageNum = i + 1;
+              } else if (pagination.currentPage >= pagination.totalPages - 2) {
+                pageNum = pagination.totalPages - 4 + i;
+              } else {
+                pageNum = pagination.currentPage - 2 + i;
+              }
+
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => handlePageChange(pageNum)}
+                  className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                    pagination.currentPage === pageNum
+                      ? 'z-10 bg-primary-50 border-primary-500 text-primary-600'
+                      : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+            <button
+              onClick={() => handlePageChange(pagination.currentPage + 1)}
+              disabled={pagination.currentPage === pagination.totalPages}
+            >
+              Next
+            </button>
+          </nav>
         </div>
       )}
     </div>

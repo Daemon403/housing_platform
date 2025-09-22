@@ -17,7 +17,8 @@ type AuthContextType = {
   logout: () => void
 }
 
-const AuthContext = createContext<AuthContextType>({} as any)
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
+AuthContext.displayName = 'AuthContext'
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'))
@@ -79,4 +80,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-export const useAuth = () => useContext(AuthContext)
+export function useAuth() {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider')
+  }
+  return context
+}

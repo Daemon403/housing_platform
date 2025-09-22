@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+type EditMode = 'create' | 'edit';
+
 interface ListingData {
   title: string;
   description: string;
@@ -30,10 +32,31 @@ interface ListingData {
   status: string;
 }
 
-export default function EditListing() {
+interface EditListingProps {
+  mode: EditMode;
+}
+
+export default function EditListing({ mode }: EditListingProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  useAuth(); // We keep this to ensure authentication is checked
+  const auth = useAuth(); // Get the auth context
+  
+  // Validate mode and ID consistency
+  useEffect(() => {
+    if (mode === 'edit' && !id) {
+      console.error('Edit mode requires a listing ID');
+      navigate('/owner');
+    } else if (mode === 'create' && id) {
+      console.warn('Create mode does not use an ID, but one was provided');
+    }
+  }, [mode, id, navigate]);
+  
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!auth.token) {
+      navigate('/login', { state: { from: window.location.pathname } });
+    }
+  }, [auth.token, navigate]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [listing, setListing] = useState<ListingData>({
