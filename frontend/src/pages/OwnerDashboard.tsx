@@ -10,6 +10,7 @@ import './OwnerDashboard.css';
 
 // Types
 type TabType = 'properties' | 'favorites';
+// new stuff 
 
 // Define the shape of a property card listing
 interface PropertyCardListing {
