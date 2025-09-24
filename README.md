@@ -1,102 +1,179 @@
 # Student Housing Platform
 
-A full-stack platform connecting university students with local homeowners for off-campus housing.
+A comprehensive full-stack platform designed to connect university students with property owners for off-campus housing solutions. This platform streamlines the process of finding, viewing, and securing student accommodations while providing property owners with robust tools to manage their listings.
 
-## Features
+## ✨ Features
 
-- **User Authentication**: Secure registration and login with JWT
-- **Role-Based Access Control**: Students, Homeowners, and Admins
-- **Property Listings**: Browse and search available properties
-- **Booking System**: Reserve properties with date selection
-- **Reviews & Ratings**: Leave feedback on properties and users
-- **Messaging**: Direct communication between users
-- **Payments**: Secure payment processing
-- **Admin Dashboard**: Manage users, listings, and content
+### For Students
+- 🏠 Browse and search student-friendly housing options
+- 🔍 Advanced filtering by price, location, amenities, and more
+- ❤️ Save favorite properties for easy access
+- 📅 Schedule property viewings
+- 💬 Direct messaging with property owners
+- ⭐ Leave reviews and ratings
 
-## Tech Stack
+### For Property Owners
+- 🏘️ Create and manage property listings
+- 📊 Dashboard for tracking listings and inquiries
+- 📱 Mobile-responsive property management
+- 📅 Booking and availability calendar
+- 💬 Integrated messaging system
+
+### For Administrators
+- 👥 User management
+- 🏢 Property listing moderation
+- 📈 Analytics and reporting
+- ⚙️ System configuration
+
+## 🛠️ Tech Stack
+
+### Frontend
+- ⚛️ React.js with TypeScript
+- 🎨 Tailwind CSS for styling
+- 🔄 React Query for server state management
+- 🏗️ Vite for build tooling
+- 📱 Fully responsive design
 
 ### Backend
-- Node.js with Express
-- PostgreSQL with Sequelize ORM
-- JWT Authentication
-- Redis for caching
-- AWS S3 for file storage
-- Nodemailer for emails
-- Jest for testing
+- 🚀 Node.js with Express
+- 🔐 JWT Authentication
+- 🗄️ PostgreSQL with Sequelize ORM
+- 📦 AWS S3 for file storage
+- 📧 Nodemailer for email notifications
+- 📝 Swagger/OpenAPI documentation
 
-### Frontend (Coming Soon)
-- React.js with Next.js
-- Redux for state management
-- Material-UI for components
-- Mapbox for maps
-- Stripe for payments
+### DevOps
+- 🐳 Docker for containerization
+- 🔄 GitHub Actions for CI/CD
+- 📊 Monitoring and logging
+- 🔒 Environment-based configuration
 
-## Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
 
-- Node.js 16+
-- PostgreSQL 13+
-- Redis
+- Node.js 18+ (LTS recommended)
+- PostgreSQL 14+
 - AWS S3 bucket (for file uploads)
+- Git
 
 ### Installation
 
-1. Clone the repository
+1. **Clone the repository**
    ```bash
    git clone https://github.com/yourusername/student-housing-platform.git
    cd student-housing-platform
    ```
 
-2. Install dependencies
+2. **Set up backend**
    ```bash
-   cd server
+   cd backend
    npm install
-   ```
-
-3. Set up environment variables
-   ```bash
    cp .env.example .env
-   # Update the .env file with your configuration
+   # Update .env with your configuration
    ```
 
-4. Set up database
+3. **Set up frontend**
    ```bash
-   npx sequelize-cli db:create
-   npx sequelize-cli db:migrate
-   npx sequelize-cli db:seed:all
+   cd ../frontend
+   npm install
+   cp .env.example .env
+   # Update .env with your configuration
    ```
 
-5. Start the development server
+4. **Start development servers**
    ```bash
+   # In one terminal (backend)
+   cd backend
+   npm run dev
+
+   # In another terminal (frontend)
+   cd frontend
    npm run dev
    ```
 
-## API Documentation
+5. **Access the application**
+   - Frontend: http://localhost:5173
+   - API Documentation: http://localhost:3000/api-docs
 
-API documentation is available at `/api-docs` when running the development server.
+## 📚 Documentation
 
-## Project Structure
+### API Documentation
+Interactive API documentation is available at `/api-docs` when running the development server. The API follows RESTful principles and uses JSON for data exchange.
+
+### Project Structure
 
 ```
 student-housing-platform/
-├── server/                    # Backend server
-│   ├── config/               # Configuration files
-│   ├── controllers/          # Route controllers
-│   ├── middleware/           # Custom middleware
-│   ├── models/               # Database models
-│   ├── routes/               # API routes
-│   ├── services/             # Business logic
-│   ├── utils/                # Utility functions
-│   ├── server.js             # Main server file
-│   └── .env.example          # Environment variables example
-├── client/                   # Frontend (coming soon)
-└── README.md                 # This file
+├── backend/                  # Backend server
+│   ├── config/              # Configuration files
+│   ├── controllers/         # Route controllers
+│   ├── middleware/          # Custom middleware
+│   ├── models/              # Database models
+│   ├── routes/              # API routes
+│   ├── services/            # Business logic
+│   ├── utils/               # Utility functions
+│   └── server.ts            # Main server file
+│
+├── frontend/                # Frontend application
+│   ├── public/             # Static files
+│   ├── src/
+│   │   ├── components/     # Reusable UI components
+│   │   ├── pages/          # Page components
+│   │   ├── hooks/          # Custom React hooks
+│   │   ├── services/       # API service layer
+│   │   ├── store/          # State management
+│   │   ├── types/          # TypeScript type definitions
+│   │   └── App.tsx         # Main application component
+│   └── vite.config.ts      # Vite configuration
+│
+├── .github/                 # GitHub workflows and templates
+├── docker/                  # Docker configuration
+├── docs/                   # Additional documentation
+└── README.md               # This file
 ```
 
-## Environment Variables
+## ⚙️ Configuration
 
-Create a `.env` file in the `server` directory with the following variables:
+### Backend Environment Variables
+Create a `.env` file in the `backend` directory with the following variables:
+
+```env
+# Server
+PORT=3000
+NODE_ENV=development
+
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=student_housing
+DB_USER=postgres
+DB_PASSWORD=your_password
+
+# JWT
+JWT_SECRET=your_jwt_secret
+JWT_EXPIRES_IN=7d
+
+# AWS S3
+AWS_ACCESS_KEY_ID=your_aws_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret
+AWS_REGION=your_region
+AWS_BUCKET_NAME=your_bucket_name
+
+# Email (SMTP)
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=your_email@example.com
+SMTP_PASS=your_email_password
+```
+
+### Frontend Environment Variables
+Create a `.env` file in the `frontend` directory:
+
+```env
+VITE_API_BASE_URL=http://localhost:3000/api
+# Add other frontend environment variables here
+```
 
 ```
 # Server
